@@ -2,7 +2,6 @@
 import { query, withTransaction, logAudit } from "@/lib/db";
 import { requireRole } from "@/lib/guard";
 import { CATEGORIES, NEEDS_INSPECTION } from "@/lib/sla";
-import { recordTrustEvent, eventForCategory } from "@/lib/trust";
 
 export const dynamic = "force-dynamic";
 
@@ -88,21 +87,10 @@ export async function PATCH(req, { params }) {
           await logAudit(id, staff.email, "UPDATED_OUTCOME", { from: row.outcome, to: next }, run);
         }
       }
-      return { ok: true, categoryChanged: categoryGiven && b.category !== row.triage_category, category };
+      return { ok: true };
     });
 
     if (result.error) return json({ error: result.error }, result.code);
-
-    // Trust score. This must never stop an officer from reviewing a report.
-    try {
-      if (b.falseReport === true) await recordTrustEvent(id, "report_false");
-      else if (result.categoryChanged) {
-        const ev = eventForCategory(result.category);
-        if (ev) await recordTrustEvent(id, ev);
-      }
-    } catch (e) {
-      console.error("Trust score update failed:", e);
-    }
     return json({ ok: true });
   } catch (error) {
     console.error(error);

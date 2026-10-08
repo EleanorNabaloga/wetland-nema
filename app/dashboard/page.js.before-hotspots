@@ -61,8 +61,6 @@ export default function Dashboard() {
   const [filter, setFilter] = useState("all");
   const [selId, setSelId] = useState(null);
   const [error, setError] = useState("");
-  const [trust, setTrust] = useState(null);
-  const [trustTick, setTrustTick] = useState(0);
 
   const signedOut = useCallback(() => {
     router.push("/login?next=/dashboard");
@@ -139,27 +137,11 @@ export default function Dashboard() {
   const reviewed = sel && sel.status === "viewed";
   const needsInspection = sel && NEEDS_INSPECTION.includes(sel.category);
 
-  useEffect(() => {
-    setTrust(null);
-    if (!selId) return;
-    let live = true;
-    fetch("/api/trust?report=" + encodeURIComponent(selId), { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (live) setTrust(d);
-      })
-      .catch(() => {});
-    return () => {
-      live = false;
-    };
-  }, [selId, sel && sel.status, sel && sel.category, trustTick]);
-
   return (
     <div className="dash">
       <header className="bar">
         <span className="logo">Wetland Watch · NEMA dashboard</span>
         <span>
-          <a className="link" href="/hotspots">Hotspots</a>{" "}
           {IS_DEMO && (
             <>
               {" "}
@@ -316,28 +298,6 @@ export default function Dashboard() {
                 </dd>
                 <dt>Decided</dt>
                 <dd>{when(sel.decidedAt)}</dd>
-                <dt>Reporter trust</dt>
-                <dd>
-                  {trust
-                    ? `${trust.level} (score ${trust.score}, ${trust.verifiedCount} verified)${trust.markedFalse ? " - marked false" : ""}`
-                    : "Not available"}
-                  {reviewed && trust && !trust.markedFalse && (
-                    <button
-                      type="button"
-                      className="ghost"
-                      style={{ marginLeft: 8 }}
-                      onClick={async () => {
-                        if (!confirm("Mark this report as false? This lowers the reporter's trust.")) return;
-                        if (await patch(sel.id, { falseReport: true })) {
-                          setTrustTick((n) => n + 1);
-                          load();
-                        }
-                      }}
-                    >
-                      Mark as false report
-                    </button>
-                  )}
-                </dd>
                 <dt>Evidence hash</dt>
                 <dd>
                   <code>{sel.hash.slice(0, 16)}…</code>
