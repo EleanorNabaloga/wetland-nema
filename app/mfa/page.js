@@ -62,7 +62,7 @@ function Mfa() {
           <p className="note">Can&apos;t scan? Enter this key by hand: <code>{info.secret}</code></p>
         </>
       ) : (
-        <p style={{ color: "#666" }}>Open your authenticator app and enter the 6-digit code for NEMA Wetland Watch.</p>
+        <p style={{ color: "#666" }}>Open your authenticator app and enter the 6-digit code for NEMA Kuuma Obutonde.</p>
       )}
       {error && <div role="alert" style={{ color: "#b00020", marginBottom: 12 }}>{error}</div>}
       <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>

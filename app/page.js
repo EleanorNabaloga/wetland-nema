@@ -1,32 +1,68 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { LANGUAGES, translator, issueLabel, initialLanguage, saveLanguage } from "@/lib/i18n";
 
+// Covers both wet and dry land: streets, slums, markets, wetlands, forests, rivers.
+// Saved in English; labels are translated in lib/i18n.js.
 const ISSUE_TYPES = [
+  "Rubbish heap (kasasiro)",
   "Plastic waste",
   "Sewer spill",
+  "Blocked drainage",
+  "Open burning / smoke",
+  "Industrial waste / chemicals",
   "Vegetation loss",
+  "Wetland encroachment",
   "Wildlife distress",
   "Other",
 ];
 
-function getLocationLabel(acc) {
-  if (acc == null) return "GPS accuracy unavailable";
-  if (acc <= 20) return "Good GPS precision";
-  if (acc <= 50) return "Acceptable GPS precision";
-  return "Weak GPS precision";
+function locationLabelKey(acc) {
+  if (acc == null || !Number.isFinite(acc)) return "gpsNone";
+  if (acc <= 20) return "gpsGood";
+  if (acc <= 50) return "gpsOk";
+  return "gpsWeak";
+}
+
+function LanguagePicker({ lang, onChange, label }) {
+  return (
+    <div className="langs" role="group" aria-label={label}>
+      {LANGUAGES.map((l) => (
+        <button key={l.code} type="button" lang={l.code} aria-pressed={lang === l.code} onClick={() => onChange(l.code)}>
+          {l.label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 export default function Home() {
-  const [type, setType] = useState("Plastic waste");
+  const [lang, setLang] = useState("en");
+  const [type, setType] = useState(ISSUE_TYPES[0]);
   const [note, setNote] = useState("");
   const [photo, setPhoto] = useState("");
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
   const [acc, setAcc] = useState("");
   const [status, setStatus] = useState("idle");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(""); // a text key, or a server message
   const [submittedId, setSubmittedId] = useState("");
+
+  const t = useMemo(() => translator(lang), [lang]);
+
+  useEffect(() => {
+    setLang(initialLanguage());
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.lang = lang;
+  }, [lang]);
+
+  function changeLanguage(code) {
+    setLang(code);
+    saveLanguage(code);
+  }
 
   useEffect(() => {
     if (!navigator.geolocation) {
@@ -64,7 +100,7 @@ export default function Home() {
   async function handleSubmit(e) {
     e.preventDefault();
     if (!lat || !lng) {
-      setError("Please allow location access before sending the report.");
+      setError("needLocation");
       return;
     }
     setError("");
@@ -84,7 +120,7 @@ export default function Home() {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setError(data.error || "Could not send the report.");
+        setError(data.error || "sendFailed");
         setStatus("idle");
         return;
       }
@@ -93,9 +129,7 @@ export default function Home() {
       setNote("");
       setPhoto("");
     } catch {
-      setError(
-        "Could not reach the server. Check your connection and try again.",
-      );
+      setError("offline");
       setStatus("idle");
     }
   }
@@ -104,22 +138,18 @@ export default function Home() {
     return (
       <main className="app">
         <div className="bar">
-          <span className="logo">Wetland Watch</span>
+          <span className="logo">Kuuma Obutonde</span>
           <a className="link" href="/dashboard">
-            NEMA dashboard
+            {t("dashboard")}
           </a>
         </div>
+        <LanguagePicker lang={lang} onChange={changeLanguage} label={t("language")} />
         <div className="reward" aria-live="polite">
-          <h2>Report received</h2>
-          <p>
-            Thanks for your alert. NEMA will review this report and update you
-            once a decision is made.
-          </p>
-          <div className="label">Case reference</div>
+          <h2>{t("received")}</h2>
+          <p>{t("thanks")}</p>
+          <div className="label">{t("caseRef")}</div>
           <input value={submittedId} readOnly />
-          <div className="note">
-            Keep this reference if you need to follow up on the report.
-          </div>
+          <div className="note">{t("keepRef")}</div>
         </div>
       </main>
     );
@@ -128,58 +158,41 @@ export default function Home() {
   return (
     <main className="app">
       <div className="bar">
-        <span className="logo">Wetland Watch</span>
+        <span className="logo">Kuuma Obutonde</span>
         <a className="link" href="/login">
-          Officer login
+          {t("officerLogin")}
         </a>
       </div>
+      <LanguagePicker lang={lang} onChange={changeLanguage} label={t("language")} />
 
-      <h1>Report pollution</h1>
-      <p className="muted">
-        Capture what you see in the wetland and share the location with NEMA.
-      </p>
+      <h1>{t("title")}</h1>
+      <p className="muted">{t("intro")}</p>
 
       <form onSubmit={handleSubmit}>
-        <div className="label">Photo</div>
-        <input
-          type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={handleImageChange}
-        />
-        {photo && (
-          <img
-            className="photo"
-            src={photo}
-            alt="Selected pollution evidence"
-          />
-        )}
+        <div className="label">{t("photo")}</div>
+        <input type="file" accept="image/*" capture="environment" onChange={handleImageChange} />
+        {photo && <img className="photo" src={photo} alt={t("photoAlt")} />}
 
-        <div className="label">Type of issue</div>
+        <div className="label">{t("issueType")}</div>
         <div className="chips">
           {ISSUE_TYPES.map((item) => (
-            <button
-              key={item}
-              type="button"
-              aria-pressed={type === item}
-              onClick={() => setType(item)}
-            >
-              {item}
+            <button key={item} type="button" aria-pressed={type === item} onClick={() => setType(item)}>
+              {issueLabel(item, lang)}
             </button>
           ))}
         </div>
 
         <div className="loc" data-state={locState}>
-          <div className="loc-t">Location</div>
+          <div className="loc-t">{t("location")}</div>
           {lat && lng ? (
             <>
               <div className="loc-s">
                 {Number(lat).toFixed(5)}, {Number(lng).toFixed(5)}
               </div>
-              <div className="loc-s">{getLocationLabel(Number(acc || 0))}</div>
+              <div className="loc-s">{t(locationLabelKey(acc === "" ? null : Number(acc)))}</div>
             </>
           ) : (
-            <div className="loc-s">Waiting for GPS…</div>
+            <div className="loc-s">{t("waitingGps")}</div>
           )}
           <button
             type="button"
@@ -192,39 +205,26 @@ export default function Home() {
               })
             }
           >
-            Refresh location
+            {t("refresh")}
           </button>
         </div>
 
-        <div className="label">What did you see?</div>
-        <textarea
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="Describe the issue, any smells, runoff, blocked drains, debris, wildlife concerns, or anything you think NEMA should inspect."
-        />
+        <div className="label">{t("whatSaw")}</div>
+        <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("notePlaceholder")} />
 
         {error && (
-          <p
-            role="alert"
-            className="note"
-            style={{ color: "#b00020", marginTop: 12 }}
-          >
-            {error}
+          <p role="alert" className="note" style={{ color: "#b00020", marginTop: 12 }}>
+            {t(error)}
           </p>
         )}
         {status === "geo-unavailable" && (
           <p className="note" style={{ marginTop: 12 }}>
-            Location access is unavailable on this device. Please enable GPS or
-            enter the location manually.
+            {t("geoUnavailable")}
           </p>
         )}
 
-        <button
-          className="big"
-          type="submit"
-          disabled={status === "sending" || !lat || !lng}
-        >
-          {status === "sending" ? "Sending…" : "Send report"}
+        <button className="big" type="submit" disabled={status === "sending" || !lat || !lng}>
+          {status === "sending" ? t("sending") : t("send")}
         </button>
       </form>
     </main>

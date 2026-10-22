@@ -1,6 +1,6 @@
-# Wetland Watch (Next.js)
+# Kuuma Obutonde (Next.js)
 
-A reporting app for wetland pollution. A reporter takes a photo, the phone records GPS, and NEMA staff review the report on a protected dashboard. The reporter sees the outcome and can then unlock a reward.
+A reporting app for pollution and damage to the environment, on both wet and dry land (wetlands, streets, slums, markets, rivers, forests). A reporter takes a photo, the phone records GPS, and NEMA staff review the report on a protected dashboard. The reporter sees the outcome and can then unlock a reward.
 
 ## What it does
 
@@ -11,8 +11,9 @@ A reporting app for wetland pollution. A reporter takes a photo, the phone recor
 - **SLA tracking**: reports left in `new` past the acknowledgement deadline show an "overdue" badge (`lib/sla.js`).
 - **Hotspots**: groups reports into roughly 500 m grid cells and ranks them by report count. Reports with GPS accuracy worse than 500 m are excluded. Available at `/hotspots` and as a card component.
 - **Admin staff page (`/admin/staff`)**: approve or reject officer access requests.
+- **Duplicate photo check**: the server gives each photo a visual fingerprint (`lib/photoFingerprint.js`) and refuses a photo that was already sent, even if it was resized, compressed, re-saved, rotated or brightened. Blocked attempts are written to the audit log with the report they matched. Heavily cropped copies, and new photos of the same place, are not caught by this check.
 - **Audit log**: staff logins, MFA enrolment and report actions are recorded.
-- **Translations**: UI text is kept in `lib/i18n.js` and `lib/strings/`.
+- **Languages**: the reporter screen is in English, Luganda and Kiswahili, with a switcher at the top. Text lives in `lib/i18n.js`. Issue types are saved in English so the staff dashboard (English only) and hotspot map are not affected. The Luganda and Kiswahili text needs a check by native speakers.
 
 ## Run it in VS Code
 
@@ -73,7 +74,7 @@ lib/db.js                         data layer (Postgres, JSON fallback)
 lib/session.js  lib/guard.js      sessions and requireRole
 lib/totp.js  lib/secrets.js       MFA and secret handling
 lib/sla.js                        triage categories and SLA timers
-lib/i18n.js  lib/strings/         translations
+lib/i18n.js                      reporter text in English, Luganda, Kiswahili
 lib/format.js
 middleware.js                     redirects unauthenticated users to /login
 public/sw.js                      service worker

@@ -43,7 +43,7 @@ export default function StaffAdmin() {
   return (
     <div className="dash">
       <header className="bar">
-        <span className="logo">Wetland Watch · Staff access</span>
+        <span className="logo">Kuuma Obutonde · Staff access</span>
         <LogoutButton />
       </header>
       <p className="note">Confirm each person with NEMA (phone or HR) before approving. Admins manage accounts only and cannot see reports.</p>

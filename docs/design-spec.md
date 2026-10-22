@@ -1,4 +1,4 @@
-# Wetland Watch: design spec (source of truth)
+# Kuuma Obutonde: design spec (source of truth)
 
 Separate community signal from evidence-grade cases. Do not pretend every voice note is a legal case. Design for NEMA's absorption capacity.
 

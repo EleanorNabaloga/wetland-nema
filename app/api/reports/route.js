@@ -1,6 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 import { query, withTransaction, logAudit } from "@/lib/db";
 import { requireRole } from "@/lib/guard";
+import { decodeDataUrl, fingerprintsOf, findDuplicate, saveFingerprint } from "@/lib/photoFingerprint";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,32 @@ export async function POST(req) {
 
     const reportId = String(body.id || `NEMA-${Date.now()}`);
     const photo = String(body.photo || "");
+
+    // Block a photo that was already sent, even resized, recompressed or rotated.
+    // The error values are text keys the reporter screen translates.
+    let photoHash = null;
+    if (photo) {
+      const image = decodeDataUrl(photo);
+      let hashes;
+      try {
+        hashes = image && (await fingerprintsOf(image));
+      } catch {
+        hashes = null;
+      }
+      if (!hashes) return json({ error: "badPhoto" }, 400);
+      const dup = await findDuplicate(hashes);
+      if (dup) {
+        // Which report it matched is kept for staff only, not shown to the sender.
+        await logAudit(null, "reporter", "DUPLICATE_PHOTO_BLOCKED", {
+          matchedReport: dup.reportId,
+          distance: dup.distance,
+          lat,
+          lng,
+        });
+        return json({ error: "duplicatePhoto" }, 409);
+      }
+      photoHash = hashes[0];
+    }
     const payload = {
       id: reportId,
       lat,
@@ -113,6 +140,8 @@ export async function POST(req) {
         payload.decided_at,
       ],
     );
+
+    if (photoHash) await saveFingerprint(reportId, photoHash);
 
     await logAudit(reportId, "reporter", "REPORT_SUBMITTED", {
       type: payload.type,

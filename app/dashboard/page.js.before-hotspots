@@ -140,7 +140,7 @@ export default function Dashboard() {
   return (
     <div className="dash">
       <header className="bar">
-        <span className="logo">Wetland Watch · NEMA dashboard</span>
+        <span className="logo">Kuuma Obutonde · NEMA dashboard</span>
         <span>
           {IS_DEMO && (
             <>
