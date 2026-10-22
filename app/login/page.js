@@ -5,6 +5,10 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
+// Where the public send reports. Set NEXT_PUBLIC_REPORTER_URL if the address changes.
+const REPORTER_URL =
+  process.env.NEXT_PUBLIC_REPORTER_URL || "https://wetland-watch.vercel.app";
+
 function safeNext(v) {
   return typeof v === "string" && v.startsWith("/") && !v.startsWith("//")
     ? v
@@ -107,6 +111,13 @@ function LoginForm() {
         <Link className="link" href="/register">
           Request access
         </Link>
+      </p>
+      <p style={{ marginTop: 24, color: "#666" }}>
+        Not NEMA staff? To report pollution, use the{" "}
+        <a className="link" href={REPORTER_URL}>
+          Kuuma Obutonde reporter app
+        </a>
+        .
       </p>
     </div>
   );

@@ -74,6 +74,3 @@ textarea{width:100%;margin-top:.8rem;padding:.7rem .8rem;border:1.5px solid var(
 .detail select{margin-top:.4rem;width:100%;padding:.65rem;border:1.5px solid var(--line);border-radius:12px;background:var(--card)}
 .empty{padding:2rem 1rem;text-align:center;color:var(--muted);border:2px dashed var(--line);border-radius:var(--r)}
 .list li.sel button{border-color:var(--blue)}
-.langs{display:flex;flex-wrap:wrap;gap:.4rem;margin:.25rem 0 1rem}
-.langs button{border:1.5px solid var(--line);background:var(--card);border-radius:999px;padding:.3rem .8rem;font-size:.85rem;font-weight:600;cursor:pointer}
-.langs button[aria-pressed=true]{background:var(--green);border-color:var(--green);color:#fff}

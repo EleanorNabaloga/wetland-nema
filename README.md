@@ -1,19 +1,17 @@
 # Kuuma Obutonde (Next.js)
 
-A reporting app for pollution and damage to the environment, on both wet and dry land (wetlands, streets, slums, markets, rivers, forests). A reporter takes a photo, the phone records GPS, and NEMA staff review the report on a protected dashboard. The reporter sees the outcome and can then unlock a reward.
+The NEMA staff side of Kuuma Obutonde, a reporting system for pollution and damage to the environment on both wet and dry land (wetlands, streets, slums, markets, rivers, forests). The public send reports through the separate reporter app (the `Wetland-watch` repo, live at https://wetland-watch.vercel.app), which writes to the same database. NEMA staff review those reports here, behind login and MFA.
 
 ## What it does
 
-- **Reporter screen (`/`)**: photo, GPS, send, report tracker, reward.
+- **Staff only**: `/` opens the dashboard, and signed-out visitors go to the login page, which links members of the public to the reporter app. This app has no public way to send reports.
 - **Staff login with MFA**: officers sign in with email and password, then an authenticator (TOTP) code. New officers use "Request access" and an admin approves them.
 - **Roles**: `admin`, `reviewer`, `inspector`, `legal`. API routes are protected with `requireRole`.
 - **Reviewer dashboard (`/dashboard`)**: report list with photo, location and status, "Mark as reviewed", then a triage category and a next step the reporter sees.
 - **SLA tracking**: reports left in `new` past the acknowledgement deadline show an "overdue" badge (`lib/sla.js`).
 - **Hotspots**: groups reports into roughly 500 m grid cells and ranks them by report count. Reports with GPS accuracy worse than 500 m are excluded. Available at `/hotspots` and as a card component.
 - **Admin staff page (`/admin/staff`)**: approve or reject officer access requests.
-- **Duplicate photo check**: the server gives each photo a visual fingerprint (`lib/photoFingerprint.js`) and refuses a photo that was already sent, even if it was resized, compressed, re-saved, rotated or brightened. Blocked attempts are written to the audit log with the report they matched. Heavily cropped copies, and new photos of the same place, are not caught by this check.
 - **Audit log**: staff logins, MFA enrolment and report actions are recorded.
-- **Languages**: the reporter screen is in English, Luganda and Kiswahili, with a switcher at the top. Text lives in `lib/i18n.js`. Issue types are saved in English so the staff dashboard (English only) and hotspot map are not affected. The Luganda and Kiswahili text needs a check by native speakers.
 
 ## Run it in VS Code
 
@@ -22,7 +20,7 @@ npm install
 npm run dev          # http://localhost:3001
 ```
 
-Open `/dashboard` on a laptop and `/` on a phone. Reports are shared through the server, so different devices see the same data.
+Open `/dashboard` on a laptop. To create reports, run the reporter app against the same `DATABASE_URL`.
 
 If port 3001 is busy, a dev server is already running. Stop it first (PowerShell):
 
@@ -57,7 +55,7 @@ Note: the database region matters for speed. A project in AWS US East 2 is slow 
 ## Structure
 
 ```
-app/page.js                       reporter screen (photo, GPS, send, tracker, reward)
+app/page.js                       sends visitors to the dashboard (staff only)
 app/dashboard/page.js             reviewer dashboard (list, triage, next step)
 app/hotspots/page.js              ranked hotspot list
 app/login/  app/mfa/  app/register/   staff sign in, MFA, access request
@@ -74,7 +72,6 @@ lib/db.js                         data layer (Postgres, JSON fallback)
 lib/session.js  lib/guard.js      sessions and requireRole
 lib/totp.js  lib/secrets.js       MFA and secret handling
 lib/sla.js                        triage categories and SLA timers
-lib/i18n.js                      reporter text in English, Luganda, Kiswahili
 lib/format.js
 middleware.js                     redirects unauthenticated users to /login
 public/sw.js                      service worker
