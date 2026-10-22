@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 import { getPool } from "../../../lib/db";
+import { requireRole } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  // TODO: add the same auth/role check your reports API route uses
+// Same staff roles as GET /api/reports. Report locations are not public.
+const STAFF_ROLES = ["reviewer", "inspector", "legal"];
+
+export async function GET(req) {
+  if (!(await requireRole(req, STAFF_ROLES)))
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { rows } = await getPool().query(`
     SELECT
       round(avg(lat)::numeric, 5)::float8            AS lat,
