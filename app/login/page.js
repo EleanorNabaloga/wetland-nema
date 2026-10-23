@@ -112,6 +112,12 @@ function LoginForm() {
           Request access
         </Link>
       </p>
+      <p style={{ marginTop: 16 }}>
+        New to the dashboard?{" "}
+        <Link className="link" href="/help">
+          How to sign in and use it
+        </Link>
+      </p>
       <p style={{ marginTop: 24, color: "#666" }}>
         Not NEMA staff? To report pollution, use the{" "}
         <a className="link" href={REPORTER_URL}>
