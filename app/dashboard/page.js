@@ -340,7 +340,17 @@ export default function Dashboard() {
                 </dd>
                 <dt>Evidence hash</dt>
                 <dd>
-                  <code>{sel.hash.slice(0, 16)}…</code>
+                  {sel.hash ? <code>{sel.hash.slice(0, 16)}…</code> : "Not provided"}
+                </dd>
+                <dt>Evidence signature</dt>
+                <dd>
+                  {sel.signatureStatus === "verified" ? (
+                    <span className="badge b-ok">Verified on arrival</span>
+                  ) : sel.signatureStatus === "unsigned" ? (
+                    <span className="badge b-new">Not signed (older phone)</span>
+                  ) : (
+                    "Not recorded (sent before signature checks)"
+                  )}
                 </dd>
               </dl>
 

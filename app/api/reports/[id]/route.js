@@ -1,6 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 import { query, withTransaction, logAudit } from "@/lib/db";
 import { requireRole } from "@/lib/guard";
+import { signatureStatusSql } from "@/lib/schema";
 import { CATEGORIES, NEEDS_INSPECTION } from "@/lib/sla";
 import { recordTrustEvent, eventForCategory } from "@/lib/trust";
 
@@ -15,8 +16,9 @@ export async function GET(req, { params }) {
     const staff = await requireRole(req, ["reviewer", "inspector", "legal"]);
     if (!staff) return json({ error: "Unauthorized" }, 401);
 
+    const sigSql = await signatureStatusSql();
     const res = await query(
-      `SELECT r.id, r.lat, r.lng, r.acc, r.ts, r.type, r.note, r.photo_url AS photo, r.hash,
+      `SELECT r.id, r.lat, r.lng, r.acc, r.ts, r.type, r.note, r.photo_url AS photo, r.hash, ${sigSql},
               r.status, r.outcome, r.viewed_at AS "viewedAt", r.reviewed_by AS "reviewedBy",
               r.triage_category AS category, r.triaged_at AS "triagedAt", r.inspected_at AS "inspectedAt",
               r.decided_at AS "decidedAt", (EXTRACT(EPOCH FROM r.received_at) * 1000)::double precision AS "receivedAt",

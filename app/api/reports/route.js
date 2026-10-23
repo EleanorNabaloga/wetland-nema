@@ -1,6 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 import { query, withTransaction, logAudit } from "@/lib/db";
 import { requireRole } from "@/lib/guard";
+import { signatureStatusSql } from "@/lib/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -11,8 +12,9 @@ export async function GET(req) {
   try {
     if (!(await requireRole(req, STAFF_ROLES)))
       return json({ error: "Unauthorized" }, 401);
+    const sigSql = await signatureStatusSql();
     const res = await query(
-      `SELECT r.id, r.lat, r.lng, r.acc, r.ts, r.type, r.note, r.photo_url AS photo, r.hash,
+      `SELECT r.id, r.lat, r.lng, r.acc, r.ts, r.type, r.note, r.photo_url AS photo, r.hash, ${sigSql},
               r.source, r.location_source AS "locationSource", r.time_source AS "timeSource",
               r.device_public_key AS "publicKey",
               r.status, r.outcome, r.viewed_at AS "viewedAt", r.reviewed_by AS "reviewedBy",
