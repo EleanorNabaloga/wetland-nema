@@ -86,10 +86,19 @@ export default function Dashboard() {
     } catch {}
   }, [signedOut]);
 
+  // Refresh every 30 seconds while the tab is visible, and right away when an
+  // officer comes back to it, instead of re-downloading the list every 3 seconds.
   useEffect(() => {
     load();
-    const t = setInterval(load, 3000);
-    return () => clearInterval(t);
+    const tick = () => {
+      if (document.visibilityState === "visible") load();
+    };
+    const t = setInterval(tick, 30000);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", tick);
+    };
   }, [load]);
 
   async function patch(id, body) {
@@ -231,7 +240,11 @@ export default function Dashboard() {
           {list.map((r) => (
             <li key={r.id} className={r.id === selId ? "sel" : ""}>
               <button type="button" onClick={() => setSelId(r.id)}>
-                <img alt="" src={r.photo} />
+                {(r.hasPhoto ?? Boolean(r.photo)) ? (
+                  <img alt="" loading="lazy" src={`/api/reports/${encodeURIComponent(r.id)}/photo`} />
+                ) : (
+                  <span aria-hidden="true" style={{ width: 56, height: 56, flex: "none" }} />
+                )}
                 <span className="grow">
                   <span className="t">
                     {r.id} · {r.category || r.type || "Pollution"}
@@ -278,7 +291,9 @@ export default function Dashboard() {
               <p>
                 <SlaBadge r={sel} />
               </p>
-              <img className="photo" alt="Evidence photo" src={sel.photo} />
+              {(sel.hasPhoto ?? Boolean(sel.photo)) && (
+                <img className="photo" alt="Evidence photo" src={`/api/reports/${encodeURIComponent(sel.id)}/photo`} />
+              )}
               <iframe
                 key={sel.id}
                 title="Map of where the photo was taken"

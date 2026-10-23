@@ -40,8 +40,15 @@ export default function HotspotList() {
 
   useEffect(() => {
     load();
-    const t = setInterval(load, 10000);
-    return () => clearInterval(t);
+    const tick = () => {
+      if (document.visibilityState === "visible") load();
+    };
+    const t = setInterval(tick, 60000);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", tick);
+    };
   }, [load]);
 
   return (
