@@ -135,6 +135,10 @@ export default function HelpPage() {
       </Step>
 
       <Step n={3} title="Set up two-step login (first sign-in only)">
+        <p className="muted">
+          If you go straight to the dashboard after your password, two-step login has not been switched on
+          for your office yet. Skip steps 3 and 4; you will be asked to set it up once it is.
+        </p>
         <ol>
           <li>After your password, the dashboard shows a <b>QR code</b>.</li>
           <li>
