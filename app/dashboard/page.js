@@ -26,6 +26,15 @@ function mapUrl(r) {
   const bbox = [r.lng - d, r.lat - d, r.lng + d, r.lat + d].join("%2C");
   return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${r.lat}%2C${r.lng}`;
 }
+// Time between the photo being taken and the report reaching NEMA. Only
+// meaningful when the time came from the photo itself (gallery uploads, or
+// reports queued offline); otherwise it is the send time and the gap is ~0.
+const OLD_PHOTO_MS = 48 * 3600000;
+function captureDelay(r) {
+  const gap = Number(r.receivedAt) - Number(r.ts);
+  return Number.isFinite(gap) && gap > 10 * 60000 ? gap : 0;
+}
+
 const StatusBadge = ({ r }) =>
   r.status === "viewed" ? (
     <span className="badge b-ok">Reviewed</span>
@@ -232,6 +241,14 @@ export default function Dashboard() {
                   </span>
                   <br />
                   <SlaBadge r={r} />
+                  {captureDelay(r) > OLD_PHOTO_MS && (
+                    <>
+                      {" "}
+                      <span className="badge b-new" title="Photo taken more than 48 hours before it was sent">
+                        Taken {fmtSpan(captureDelay(r))} before sending
+                      </span>
+                    </>
+                  )}
                   {r.source === "upload" && (
                     <>
                       {" "}
@@ -327,7 +344,17 @@ export default function Dashboard() {
                       : sel.timeSource || "Not stated"}
                 </dd>
                 <dt>Captured</dt>
-                <dd>{new Date(sel.ts).toLocaleString()}</dd>
+                <dd>
+                  {new Date(sel.ts).toLocaleString()}
+                  {captureDelay(sel) > 0 && (
+                    <>
+                      <br />
+                      <span className={captureDelay(sel) > OLD_PHOTO_MS ? "badge b-new" : "muted"}>
+                        Taken {fmtSpan(captureDelay(sel))} before it was sent
+                      </span>
+                    </>
+                  )}
+                </dd>
                 <dt>Received</dt>
                 <dd>{when(sel.receivedAt)}</dd>
                 <dt>Reviewed</dt>
