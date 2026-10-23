@@ -38,8 +38,11 @@ Create `.env.local` in the project root. It is git-ignored. Never commit it.
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DATABASE_URL`            | Neon Postgres connection string (use the pooled `-pooler` host with `?sslmode=require`). If unset, the app falls back to local JSON files in `data/`. |
 | `USE_LOCAL_DEMO_FALLBACK` | Set to `false` to stop falling back to JSON files.                                                                                                    |
+| `SESSION_SECRET`          | **Required in production.** At least 32 random characters; signs staff logins. The app refuses to sign anyone in without it. |
+| `MFA_ENCRYPTION_KEY`      | **Required in production.** 64 hex characters; encrypts authenticator secrets. |
+| `MFA_MODE`                | `all` (every officer uses an authenticator code), `admin` (admins only) or `off`. Defaults to `off`; set `all` for real use. |
 | `DEFAULT_ADMIN_EMAIL`     | Email for the seeded admin account.                                                                                                                   |
-| `DEFAULT_ADMIN_PASSWORD`  | Password for the seeded admin. Set a strong value. Do not rely on the built-in fallback.                                                              |
+| `DEFAULT_ADMIN_PASSWORD`  | Password for the seeded admin (demo JSON mode). In production no admin is seeded without it; the built-in fallback works only in development.                                                              |
 | `STAFF_USERS`             | Optional JSON array of extra staff accounts to seed.                                                                                                  |
 
 The admin seed only runs when the `staff_users` table is empty. Changing these values later does not update an existing account. To reset a password, write a new bcrypt hash into `staff_users.password_hash` and set `totp_enabled = false`.
