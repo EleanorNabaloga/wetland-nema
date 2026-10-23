@@ -232,6 +232,14 @@ export default function Dashboard() {
                   </span>
                   <br />
                   <SlaBadge r={r} />
+                  {r.source === "upload" && (
+                    <>
+                      {" "}
+                      <span className="badge b-bad" title="Photo chosen from the phone's gallery, not taken live in the app">
+                        Gallery upload
+                      </span>
+                    </>
+                  )}
                 </span>
                 <StatusBadge r={r} />
               </button>
@@ -286,11 +294,38 @@ export default function Dashboard() {
                     : `±${Math.round(sel.acc)} m`}
                 </dd>
                 <dt>Submitted via</dt>
-                <dd>{sel.source || "Not stated"}</dd>
+                <dd>
+                  {sel.source === "upload" ? (
+                    <>
+                      <span className="badge b-bad">Gallery upload</span>
+                      <br />
+                      <span className="muted">
+                        Not taken live in the app. Check that the photo, its time
+                        and its location belong to this report before acting.
+                      </span>
+                    </>
+                  ) : sel.source === "camera" ? (
+                    "Camera (taken live in the app)"
+                  ) : (
+                    sel.source || "Not stated"
+                  )}
+                </dd>
                 <dt>Location source</dt>
-                <dd>{sel.locationSource || "Not stated"}</dd>
+                <dd>
+                  {sel.locationSource === "photo"
+                    ? "Read from the photo's saved GPS"
+                    : sel.locationSource === "device"
+                      ? "Phone GPS when sent"
+                      : sel.locationSource || "Not stated"}
+                </dd>
                 <dt>Time source</dt>
-                <dd>{sel.timeSource || "Not stated"}</dd>
+                <dd>
+                  {sel.timeSource === "photo"
+                    ? "Read from the photo's saved time"
+                    : sel.timeSource === "submitted"
+                      ? "Time the report was sent"
+                      : sel.timeSource || "Not stated"}
+                </dd>
                 <dt>Captured</dt>
                 <dd>{new Date(sel.ts).toLocaleString()}</dd>
                 <dt>Received</dt>
