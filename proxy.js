@@ -1,7 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 import { readSession, COOKIE } from "@/lib/session";
 
-export async function middleware(req) {
+export async function proxy(req) {
   const { pathname } = req.nextUrl;
   const session = await readSession(req.cookies.get(COOKIE)?.value);
 
