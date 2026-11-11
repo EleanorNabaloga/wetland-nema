@@ -1,110 +1,180 @@
-# Kuuma Obutonde (Next.js)
+# Kuuma Obutonde: NEMA staff dashboard
 
-The NEMA staff side of Kuuma Obutonde, a reporting system for pollution and damage to the environment on both wet and dry land (wetlands, streets, slums, markets, rivers, forests). The public send reports through the separate reporter app (the `Wetland-watch` repo, live at https://wetland-watch.vercel.app), which writes to the same database. NEMA staff review those reports here, behind login and MFA.
+Kuuma Obutonde is a reporting system for pollution and damage to the environment on wet and dry land: wetlands, rivers, forests, streets, markets and slums. It has two apps that share one Postgres database:
 
-## What it does
+| App | Repo | Who uses it | What it does |
+| --- | --- | --- | --- |
+| Reporter app | [`Wetland-watch`](https://github.com/EleanorNabaloga/Wetland-watch) (live at https://wetland-watch.vercel.app) | The public | Take a photo, attach location, send a report, check its status, claim a reward |
+| **Staff dashboard (this repo)** | `wetland-nema` | NEMA officers | Sign in with MFA, review and triage reports, track deadlines, see hotspots, approve staff |
 
-- **Staff only**: `/` opens the dashboard, and signed-out visitors go to the login page, which links members of the public to the reporter app. This app has no public way to send reports.
-- **Staff login with MFA**: officers sign in with email and password, then an authenticator (TOTP) code. New officers use "Request access" and an admin approves them.
-- **Roles**: `admin`, `reviewer`, `inspector`, `legal`. API routes are protected with `requireRole`.
-- **Reviewer dashboard (`/dashboard`)**: report list with photo, location and status, "Mark as reviewed", then a triage category and a next step the reporter sees.
-- **SLA tracking**: reports left in `new` past the acknowledgement deadline show an "overdue" badge (`lib/sla.js`).
-- **Hotspots**: groups reports into roughly 500 m grid cells and ranks them by report count. Reports with GPS accuracy worse than 500 m are excluded. Available at `/hotspots` and as a card component.
-- **Admin staff page (`/admin/staff`)**: approve or reject officer access requests.
-- **Audit log**: staff logins, MFA enrolment and report actions are recorded.
+This app has no public way to send reports. Everyone who opens it is sent to the staff login page, which links members of the public to the reporter app.
 
-## Run it in VS Code
+More detail:
+
+- [docs/architecture.md](docs/architecture.md): how the two apps fit together, the report lifecycle, trust scores and hotspots
+- [docs/api.md](docs/api.md): every API route, who may call it, and what it returns
+- [docs/design-spec.md](docs/design-spec.md): the product design the system is working towards
+- `/help` in the running app: the officer guide (signing in and using the dashboard)
+
+## Quick start
+
+You need Node.js 20 or newer.
 
 ```bash
 npm install
 npm run dev          # http://localhost:3001
 ```
 
-Open `/dashboard` on a laptop. To create reports, run the reporter app against the same `DATABASE_URL`.
+With no `.env.local`, the app runs in **demo mode**: data is kept in JSON files in `data/` and an admin account is created for you:
 
-If port 3001 is busy, a dev server is already running. Stop it first (PowerShell):
+- email `admin@nema.gov`, password `NemaAdmin!123`
+- Two-step login is on by default, so you will be asked to scan a QR code with an authenticator app (Google Authenticator, Microsoft Authenticator, Authy). To skip this on your own machine, set `MFA_MODE=off` in `.env.local`.
+
+There are no reports in demo mode until the reporter app writes some. To see real reports, point both apps at the same `DATABASE_URL`.
+
+If port 3001 is busy, a dev server is already running. Stop it (PowerShell):
 
 ```powershell
 Get-NetTCPConnection -LocalPort 3001 -State Listen | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
 ```
 
-**Phone testing:** camera GPS and hashing need HTTPS (or localhost). Use a tunnel such as `cloudflared tunnel --url http://localhost:3001` or `ngrok http 3001`, then open the https address on the phone.
+**Testing on a phone:** use an HTTPS tunnel such as `cloudflared tunnel --url http://localhost:3001` or `ngrok http 3001` and open the https address on the phone.
+
+## What it does
+
+- **Staff login with MFA.** Email and password, then a 6-digit authenticator (TOTP) code. Repeated failures are blocked for 15 minutes. Sessions last 8 hours.
+- **Request access.** New officers register at `/register` with an official email address. An admin approves them and picks their role at `/admin/staff`.
+- **Reviewer dashboard (`/dashboard`).** List of the latest 500 reports with filters (All, New, Overdue). Open a report to see the photo, map location, GPS accuracy, evidence hash and signature status, then:
+  1. **Mark as reviewed**
+  2. pick a **triage category**: Emergency, Enforcement, Referral, Duplicate, Insufficient
+  3. for Emergency and Enforcement, **mark as inspected**
+  4. pick the **next step** the reporter sees: Inspector will visit, Referred to another agency, Need more information
+- **Deadline (SLA) tracking.** Each report has a deadline for its current stage. Reports past it show an "overdue" badge. See [the lifecycle](docs/architecture.md#report-lifecycle-and-deadlines).
+- **Warnings on weak evidence.** Photos picked from the phone gallery (not taken live) are flagged, and the dashboard shows how long before sending the photo was taken.
+- **Reporter trust score.** Each reporter's phone has a score that rises when their reports are verified and drops for duplicates or false reports. Officers can mark a report as false.
+- **Hotspots (`/hotspots`).** Groups reviewed reports into 500 m squares, weights them by how serious the problem is and how recent, and ranks them on a list and map.
+- **Audit log.** Logins, MFA setup, opening a report, and every review, triage, inspection and outcome change is recorded with the officer's email.
+
+## Roles
+
+| Role | Can do |
+| --- | --- |
+| `reviewer` | See reports, review, triage, mark inspected, set next step, mark false |
+| `inspector` | Same as reviewer |
+| `legal` | See reports, photos, trust scores and hotspots (read only) |
+| `oversight` | Can be granted by an admin, but **no page or API accepts it yet**, so these officers see nothing |
+| `admin` | Approve, reject and disable staff. **Cannot see reports** (not in the report routes' role list) |
 
 ## Environment variables
 
 Create `.env.local` in the project root. It is git-ignored. Never commit it.
 
-| Variable                  | Purpose                                                                                                                                               |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`            | Neon Postgres connection string (use the pooled `-pooler` host with `?sslmode=require`). If unset, the app falls back to local JSON files in `data/`. |
-| `USE_LOCAL_DEMO_FALLBACK` | Set to `false` to stop falling back to JSON files.                                                                                                    |
-| `SESSION_SECRET`          | **Required in production.** At least 32 random characters; signs staff logins. The app refuses to sign anyone in without it. |
-| `MFA_ENCRYPTION_KEY`      | **Required in production.** 64 hex characters; encrypts authenticator secrets. |
-| `MFA_MODE`                | `all` (every officer uses an authenticator code), `admin` (admins only) or `off`. Defaults to `all`. Requires `MFA_ENCRYPTION_KEY`. |
-| `DEFAULT_ADMIN_EMAIL`     | Email for the seeded admin account.                                                                                                                   |
-| `DEFAULT_ADMIN_PASSWORD`  | Password for the seeded admin (demo JSON mode). In production no admin is seeded without it; the built-in fallback works only in development.                                                              |
-| `STAFF_USERS`             | Optional JSON array of extra staff accounts to seed.                                                                                                  |
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `DATABASE_URL` | In production | Neon Postgres connection string. Use the pooled `-pooler` host with `?sslmode=require`. If unset, the app uses JSON files in `data/`. Must match the reporter app's. |
+| `USE_LOCAL_DEMO_FALLBACK` | No | `true` forces JSON files even when `DATABASE_URL` is set. |
+| `SESSION_SECRET` | In production | At least 32 random characters. Signs staff logins. The app refuses to sign anyone in without it. |
+| `MFA_ENCRYPTION_KEY` | In production | 64 hex characters. Encrypts authenticator secrets. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. |
+| `MFA_MODE` | No | `all` (default: every officer), `admin` (admins only) or `off` (local demos only). |
+| `ALLOWED_EMAIL_DOMAIN` | No | Email domains allowed to request access, comma separated. Default `nema.gov`. |
+| `DEFAULT_ADMIN_EMAIL` | No | Email of the first admin. Default `admin@nema.gov`. |
+| `DEFAULT_ADMIN_PASSWORD` | In production | Password of the first admin. Without it no admin is created in production. |
+| `STAFF_USERS` | No | JSON array of extra staff to create, e.g. `[{"email":"a@nema.gov","hash":"<bcrypt>","role":"reviewer"}]`. |
+| `NEXT_PUBLIC_REPORTER_URL` | No | Address of the reporter app, linked from the login page. Default `https://wetland-watch.vercel.app`. |
+| `ALLOW_DEMO_RESET` | No | `true` enables "clear all reports" outside production. Never set it on a real database. |
+| `S3_*` | No | Used only by `/api/upload`, which nothing calls (see [Known gaps](#known-gaps)). |
 
-The admin seed only runs when the `staff_users` table is empty. Changing these values later does not update an existing account. To reset a password, write a new bcrypt hash into `staff_users.password_hash` and set `totp_enabled = false`.
+Staff accounts are only created when there are no staff yet. Changing these values later does not change existing accounts. To reset a password, write a new bcrypt hash into `staff_users.password_hash` and set `totp_enabled = false` so the officer sets up their authenticator again.
 
 ## Database
 
-Data lives in Neon Postgres. Tables: `reports`, `staff_users`, `identity_vault`, `audit_log`. The schema is in `db/migrations/`. Run it in the Neon SQL Editor before first use.
+Data lives in Neon Postgres, shared with the reporter app.
 
-`lib/db.js` is a custom data layer. It recognizes specific SQL shapes (such as `select ... from reports`) and answers them, and it uses JSON files in `data/` when `DATABASE_URL` is not set. New queries that it does not recognize can return empty results. For new features, query Postgres directly with the exported `getPool()` (as the hotspots route does).
+| Table | Written by | Holds |
+| --- | --- | --- |
+| `reports` | Reporter app (creates), dashboard (review fields) | Photo, location, time, type, note, evidence hash and signature, duplicate check results, status and triage |
+| `identity_vault` | Reporter app | Reporter contact details for rewards, kept apart from reports. The dashboard only reads `claimed`. |
+| `staff_users` | Dashboard | Officers, roles, password hashes, encrypted MFA secrets |
+| `audit_log` | Dashboard | Who did what to which report, and when |
+| `reporter_trust`, `trust_events` | Dashboard | Trust scores. Created automatically on first use. |
+| `duplicate_attempts` | Reporter app | Rejected duplicate uploads |
 
-Note: the database region matters for speed. A project in AWS US East 2 is slow from East Africa. For lower latency, create the Neon project in `eu-central-1`.
+Run the migrations in the Neon SQL Editor (or with `psql "$DATABASE_URL" -f <file>`) in this order:
 
-## Structure
+1. `wetland-nema/db/migrations/20261001_shared_reporter_storage.sql`
+2. `Wetland-watch/db/migrations/20261010_duplicate_detection.sql`
+
+The migrations only add columns. The `CREATE TABLE` statements for `reports`, `staff_users`, `identity_vault` and `audit_log` are not in either repo yet (see [Known gaps](#known-gaps)).
+
+`lib/db.js` is a custom data layer. With a database it passes SQL to Postgres. In demo mode it recognizes specific SQL shapes and answers them from the JSON files, so **a new query it does not recognize returns nothing in demo mode**. For new features that need Postgres, use the exported `getPool()` directly.
+
+The database region matters for speed. A project in AWS US East 2 is slow from East Africa. Create the Neon project in `eu-central-1` for lower latency.
+
+### Helper scripts
+
+Run with the database address set, e.g. `node --env-file=.env.local scripts/db-check.mjs`.
+
+| Script | What it does |
+| --- | --- |
+| `scripts/db-check.mjs` | Shows which database is in use, report counts by status, and whether the migrations and trust table exist |
+| `scripts/review-data.mjs` | Lists officer accounts (with MFA on/off) and all reports |
+| `scripts/dup-check.mjs` | Shows duplicate check results for the newest 6 reports |
+| `scripts/remove-placeholder-admin.mjs` | Deletes the `your-admin-email` placeholder account. Dry run unless you add `--confirm`. |
+
+## Project structure
 
 ```
-app/page.js                       sends visitors to the dashboard (staff only)
-app/dashboard/page.js             reviewer dashboard (list, triage, next step)
-app/hotspots/page.js              ranked hotspot list
-app/login/  app/mfa/  app/register/   staff sign in, MFA, access request
-app/admin/staff/page.js           approve or reject staff
-app/api/reports/route.js          list and create reports (role protected)
-app/api/reports/[id]/route.js     view, review, triage, outcome, claim
-app/api/hotspots/route.js         hotspot grouping query
-app/api/auth/                     login, logout, MFA, register
-app/api/admin/staff/route.js      staff approvals
-app/api/upload/route.js           photo upload
-components/HotspotList.js         hotspot card list
-components/LogoutButton.js
-lib/db.js                         data layer (Postgres, JSON fallback)
-lib/session.js  lib/guard.js      sessions and requireRole
-lib/totp.js  lib/secrets.js       MFA and secret handling
-lib/sla.js                        triage categories and SLA timers
-lib/format.js
-middleware.js                     redirects unauthenticated users to /login
-public/sw.js                      service worker
-db/migrations/                    SQL schema
-docs/design-spec.md               full spec
-app/globals.css                   styles
+app/
+  page.js                     sends visitors to the dashboard
+  login/ mfa/ register/       staff sign in, authenticator step, access request
+  dashboard/page.js           reviewer dashboard
+  hotspots/page.js            ranked hotspot list and map
+  admin/staff/page.js         approve, reject, disable staff
+  help/page.js                officer guide
+  api/                        see docs/api.md
+components/
+  HotspotList.js  HotspotMap.js  LogoutButton.js
+lib/
+  db.js                       data layer (Postgres, or JSON files in demo mode)
+  session.js  guard.js        signed session cookies and requireRole()
+  totp.js  secrets.js         authenticator codes and secret encryption
+  sla.js                      triage categories, stages and deadlines
+  trust.js                    reporter trust score
+  hotspots.js                 hotspot scoring
+  schema.js                   makes sure the signature columns exist
+proxy.js                      sends signed-out users to /login, non-admins away from /admin
+next.config.mjs               security headers
+db/migrations/                SQL changes
+scripts/                      database helper scripts
+docs/                         design spec, architecture, API reference
 ```
 
-## Triage options
+## Deploying
 
-- **Categories**: Emergency, Enforcement, Referral, Duplicate, Insufficient. Emergency and Enforcement need an inspection.
-- **Next steps**: Inspector will visit, Referred to another agency, Need more information.
+1. Create the Neon database (preferably `eu-central-1`) and run the migrations.
+2. On the host (e.g. Vercel), set `DATABASE_URL`, `SESSION_SECRET`, `MFA_ENCRYPTION_KEY`, `DEFAULT_ADMIN_EMAIL` and `DEFAULT_ADMIN_PASSWORD`. Leave `MFA_MODE` unset (defaults to `all`) and `ALLOW_DEMO_RESET` unset.
+3. `npm run build`, then `npm start` (or let the host build it).
+4. Sign in as the admin, set up the authenticator, and approve the first officers.
+
+JSON files do not persist on serverless hosting, so `DATABASE_URL` is required there.
 
 ## Security notes
 
-- `.env.local` and `data/` must stay out of Git. `data/` can hold report photos, coordinates and identity data.
-- `/api/hotspots` must have the same `requireRole` check as the other report routes before deployment. Add it if it is not there yet.
+- `.env.local` and `data/` must stay out of Git. `data/` can hold photos, locations and reporter identity data.
 - Rotate the Neon password if it is ever exposed.
 - Do not send anything from `identity_vault` to third-party services.
+- Every page sends security headers that stop the dashboard being shown inside other sites and turn off camera, microphone and location access (`next.config.mjs`).
+- Login and access-request rate limits are kept in server memory. On serverless hosting each instance has its own count, so treat them as a speed bump, not a guarantee.
 
-## Before real use (still to do)
+## Known gaps
 
-1. Add the `requireRole` check to `/api/hotspots` and gate `/hotspots` in `middleware.js`.
-2. Move photos to object storage instead of the database. Sign evidence on the device with a key, not just a hash.
-3. Confirm the offline queue (service worker + IndexedDB) retries sends when the signal returns, and add the PWA manifest and icons.
-4. SMS/airtime provider for rewards, and ELMIS integration.
-5. Reduce latency: run independent queries in parallel, use the pooled connection, and host the database near users.
-6. Deploy on a host with environment variables set. JSON files do not persist on serverless hosting, so `DATABASE_URL` is required there.
-7. Planned: an AI helper that suggests triage category and next step for reviewers, with a human always confirming.
+Found while writing these docs (November 2026). Worth fixing before real use:
 
-```
+1. **`/api/upload` has no login check.** Anyone can ask it for a signed upload address to the S3 bucket. Nothing in either app calls it any more (the reporter app removed its own upload route), so it can be deleted, together with the `@aws-sdk/*` packages.
+2. **The `oversight` role does nothing.** Admins can grant it, but no route allows it. Either add it (read-only, like `legal`) or remove it from `/admin/staff`.
+3. **Base table definitions are missing.** Add a first migration with `CREATE TABLE` for `reports`, `staff_users`, `identity_vault` and `audit_log` so a new database can be set up from the repo alone.
+4. **`/api/hotspots` is unused and differs from the hotspot page.** The page scores reports in the browser (`lib/hotspots.js`: reviewed reports only, GPS within 250 m, weighted by type and age). The API route counts all reports with GPS within 500 m. Remove the route or make it use the same rules.
+5. **Leftover files.** `*.before-trust`, `*.before-hotspots`, `*.before-map`, `patch-trust.mjs`, `add-hotspot-map.mjs` and `archive/` are old edit scripts and backups. `public/sw.js` is not registered by any page. The login page imports `HotspotList` without using it.
+6. **No automated tests.**
 
-```
+Still to build (from the design spec): photos in object storage instead of the database, SMS/airtime rewards, ELMIS integration, and an AI helper that suggests a triage category for a human to confirm.
