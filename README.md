@@ -13,6 +13,7 @@ More detail:
 
 - [docs/architecture.md](docs/architecture.md): how the two apps fit together, the report lifecycle, trust scores and hotspots
 - [docs/api.md](docs/api.md): every API route, who may call it, and what it returns
+- [docs/ai.md](docs/ai.md): what the AI model should do in the system (proposed): rate each report's severity so the most serious are triaged first, rank the most affected places (hotspots), ease admin work (briefings, deadlines, drafts) and catch reward fraud without identifying reporters
 - [docs/design-spec.md](docs/design-spec.md): the product design the system is working towards
 - `/help` in the running app: the officer guide (signing in and using the dashboard)
 
@@ -188,4 +189,4 @@ npm test
 - Removed old edit scripts, `.before-*` backups, an unregistered service worker and an unused import.
 - Added automated tests.
 
-Still to build (from the design spec): photos in object storage instead of the database, SMS/airtime rewards, ELMIS integration, and an AI helper that suggests a triage category for a human to confirm.
+Still to build (from the design spec): photos in object storage instead of the database, SMS/airtime rewards, ELMIS integration, and AI severity triage and hotspotting, with officers always deciding (designed in [docs/ai.md](docs/ai.md)).
