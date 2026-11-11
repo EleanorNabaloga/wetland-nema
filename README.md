@@ -40,7 +40,7 @@ Create `.env.local` in the project root. It is git-ignored. Never commit it.
 | `USE_LOCAL_DEMO_FALLBACK` | Set to `false` to stop falling back to JSON files.                                                                                                    |
 | `SESSION_SECRET`          | **Required in production.** At least 32 random characters; signs staff logins. The app refuses to sign anyone in without it. |
 | `MFA_ENCRYPTION_KEY`      | **Required in production.** 64 hex characters; encrypts authenticator secrets. |
-| `MFA_MODE`                | `all` (every officer uses an authenticator code), `admin` (admins only) or `off`. Defaults to `off`; set `all` for real use. |
+| `MFA_MODE`                | `all` (every officer uses an authenticator code), `admin` (admins only) or `off`. Defaults to `all`. Requires `MFA_ENCRYPTION_KEY`. |
 | `DEFAULT_ADMIN_EMAIL`     | Email for the seeded admin account.                                                                                                                   |
 | `DEFAULT_ADMIN_PASSWORD`  | Password for the seeded admin (demo JSON mode). In production no admin is seeded without it; the built-in fallback works only in development.                                                              |
 | `STAFF_USERS`             | Optional JSON array of extra staff accounts to seed.                                                                                                  |

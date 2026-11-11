@@ -30,7 +30,9 @@ function recordFail(key) {
 }
 
 function needsMfa(role) {
-  const mode = process.env.MFA_MODE || "off";
+  // Two-step login is on for every officer unless MFA_MODE says otherwise
+  // ("admin" = admins only, "off" = for local demos).
+  const mode = process.env.MFA_MODE || "all";
   if (mode === "off") return false;
   if (mode === "admin") return role === "admin";
   return true;
