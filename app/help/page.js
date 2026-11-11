@@ -218,7 +218,7 @@ export default function HelpPage() {
             the evidence signature and the reporter's trust.
           </li>
           <li>
-            <b>Mark as reviewed.</b> This tells the reporter a person has looked at it, and unlocks their reward.
+            <b>Mark as reviewed.</b> This tells the reporter a person has looked at it.
           </li>
           <li>
             <b>Choose a Triage category:</b>
@@ -229,6 +229,8 @@ export default function HelpPage() {
               <li><b>Duplicate</b>: the same incident was already reported.</li>
               <li><b>Insufficient</b>: not enough information to act.</li>
             </ul>
+            Emergency, Enforcement and Referral confirm the report and unlock the reporter&apos;s reward.
+            Duplicate and Insufficient do not.
           </li>
           <li>
             <b>Inspect</b> (Emergency and Enforcement only). After the site visit, choose{" "}

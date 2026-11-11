@@ -12,6 +12,13 @@ export async function proxy(req) {
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
+  // Oversight sees hotspots (totals) only, never individual reports.
+  if (session.role === "oversight" && !pathname.startsWith("/hotspots")) {
+    const url = req.nextUrl.clone();
+    url.pathname = "/hotspots";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
   if (pathname.startsWith("/admin") && session.role !== "admin") {
     const url = req.nextUrl.clone();
     url.pathname = "/dashboard";

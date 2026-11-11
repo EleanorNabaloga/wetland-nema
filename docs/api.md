@@ -1,6 +1,6 @@
 # API reference
 
-All routes are under `/api`, take and return JSON, and rely on the `ww_staff` session cookie set at login. "Staff" below means the `reviewer`, `inspector` and `legal` roles.
+All routes are under `/api`, take and return JSON, and rely on the `ww_staff` session cookie set at login. "Staff" below means the `reviewer`, `inspector` and `legal` roles. `oversight` may call only `/api/hotspots`.
 
 Errors always look like `{ "error": "message" }`.
 
@@ -102,8 +102,23 @@ Trust score of the phone that sent the report, or `null` if the report has no de
 
 ## Hotspots
 
-### `GET /api/hotspots` (staff)
-Top 20 places with at least 2 reports, grouped by about 500 m, GPS within 500 m. **Not used by the hotspot page**, which scores reports in the browser with different rules (see [architecture.md](architecture.md#hotspots)).
+### `GET /api/hotspots` (staff, oversight)
+Ranked hotspots from the latest 5000 reports, scored on the server (rules in [architecture.md](architecture.md#hotspots)).
+
+```json
+{
+  "hotspots": [
+    { "rank": 1, "level": "red", "score": 24, "reportCount": 3, "reporterCount": 3,
+      "singleSource": false, "trend": "worsening", "topType": "Sewage",
+      "lastReportAt": 1794411570733, "lat": 0.3414, "lng": 32.54414,
+      "ids": ["NEMA-101", "NEMA-102", "NEMA-103"] }
+  ],
+  "reporterKnown": true,
+  "canOpenReports": true
+}
+```
+
+For `oversight`, `ids` is left out and `canOpenReports` is `false`. `lat`/`lng` is the centre of the 500 m square, not a report's location.
 
 ## Admin
 
@@ -122,8 +137,3 @@ Up to 200 staff accounts, pending first: `email, name, role, status, createdAt, 
 | `disable` | active | disabled |
 
 Admins cannot change their own account or other admin accounts.
-
-## Upload
-
-### `POST /api/upload`
-Returns a 60-second signed S3 upload address. **No login check and no callers.** Scheduled for removal (see README, Known gaps).

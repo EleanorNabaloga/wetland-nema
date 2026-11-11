@@ -52,7 +52,7 @@ Get-NetTCPConnection -LocalPort 3001 -State Listen | ForEach-Object { Stop-Proce
 - **Deadline (SLA) tracking.** Each report has a deadline for its current stage. Reports past it show an "overdue" badge. See [the lifecycle](docs/architecture.md#report-lifecycle-and-deadlines).
 - **Warnings on weak evidence.** Photos picked from the phone gallery (not taken live) are flagged, and the dashboard shows how long before sending the photo was taken.
 - **Reporter trust score.** Each reporter's phone has a score that rises when their reports are verified and drops for duplicates or false reports. Officers can mark a report as false.
-- **Hotspots (`/hotspots`).** Groups reviewed reports into 500 m squares, weights them by how serious the problem is and how recent, and ranks them on a list and map.
+- **Hotspots (`/hotspots`).** Groups reviewed reports into 500 m squares, weights them by how serious the problem is and how recent, and ranks them on a list and map. Worked out on the server, so oversight officers see totals without receiving any report.
 - **Audit log.** Logins, MFA setup, opening a report, and every review, triage, inspection and outcome change is recorded with the officer's email.
 
 ## Roles
@@ -62,8 +62,8 @@ Get-NetTCPConnection -LocalPort 3001 -State Listen | ForEach-Object { Stop-Proce
 | `reviewer` | See reports, review, triage, mark inspected, set next step, mark false |
 | `inspector` | Same as reviewer |
 | `legal` | See reports, photos, trust scores and hotspots (read only) |
-| `oversight` | Can be granted by an admin, but **no page or API accepts it yet**, so these officers see nothing |
-| `admin` | Approve, reject and disable staff. **Cannot see reports** (not in the report routes' role list) |
+| `oversight` | Hotspots only: totals per area, with no report ids, photos, notes or reporter details. Every other page sends them to `/hotspots`. |
+| `admin` | Approve, reject and disable staff. Cannot see reports (kept separate on purpose) |
 
 ## Environment variables
 
@@ -82,7 +82,6 @@ Create `.env.local` in the project root. It is git-ignored. Never commit it.
 | `STAFF_USERS` | No | JSON array of extra staff to create, e.g. `[{"email":"a@nema.gov","hash":"<bcrypt>","role":"reviewer"}]`. |
 | `NEXT_PUBLIC_REPORTER_URL` | No | Address of the reporter app, linked from the login page. Default `https://wetland-watch.vercel.app`. |
 | `ALLOW_DEMO_RESET` | No | `true` enables "clear all reports" outside production. Never set it on a real database. |
-| `S3_*` | No | Used only by `/api/upload`, which nothing calls (see [Known gaps](#known-gaps)). |
 
 Staff accounts are only created when there are no staff yet. Changing these values later does not change existing accounts. To reset a password, write a new bcrypt hash into `staff_users.password_hash` and set `totp_enabled = false` so the officer sets up their authenticator again.
 
@@ -98,13 +97,18 @@ Data lives in Neon Postgres, shared with the reporter app.
 | `audit_log` | Dashboard | Who did what to which report, and when |
 | `reporter_trust`, `trust_events` | Dashboard | Trust scores. Created automatically on first use. |
 | `duplicate_attempts` | Reporter app | Rejected duplicate uploads |
+| `rate_limits` | Reporter app | Hashed sender keys and counts, shared by every server instance |
 
-Run the migrations in the Neon SQL Editor (or with `psql "$DATABASE_URL" -f <file>`) in this order:
+Run the migrations in the Neon SQL Editor (or with `psql "$DATABASE_URL" -f <file>`) in date order. Every file is safe to run more than once.
 
-1. `wetland-nema/db/migrations/20261001_shared_reporter_storage.sql`
-2. `Wetland-watch/db/migrations/20261010_duplicate_detection.sql`
+1. `wetland-nema/db/migrations/20260930_base_tables.sql`: `reports`, `identity_vault`, `staff_users`, `audit_log` (append-only)
+2. `wetland-nema/db/migrations/20261001_shared_reporter_storage.sql`
+3. `Wetland-watch/db/migrations/20261010_duplicate_detection.sql`
+4. `wetland-nema/db/migrations/20261020_reporter_trust.sql`
+5. `Wetland-watch/db/migrations/20261023_evidence_signature.sql`
+6. `Wetland-watch/db/migrations/20261111_rate_limits.sql`
 
-The migrations only add columns. The `CREATE TABLE` statements for `reports`, `staff_users`, `identity_vault` and `audit_log` are not in either repo yet (see [Known gaps](#known-gaps)).
+Together they rebuild the live database exactly (checked column by column and index by index in November 2026).
 
 `lib/db.js` is a custom data layer. With a database it passes SQL to Postgres. In demo mode it recognizes specific SQL shapes and answers them from the JSON files, so **a new query it does not recognize returns nothing in demo mode**. For new features that need Postgres, use the exported `getPool()` directly.
 
@@ -146,12 +150,14 @@ proxy.js                      sends signed-out users to /login, non-admins away 
 next.config.mjs               security headers
 db/migrations/                SQL changes
 scripts/                      database helper scripts
+tests/                        node --test suites (npm test)
+archive/                      first single-file version, kept for reference
 docs/                         design spec, architecture, API reference
 ```
 
 ## Deploying
 
-1. Create the Neon database (preferably `eu-central-1`) and run the migrations.
+1. Create the Neon database (preferably `eu-central-1`) and run the migrations in order.
 2. On the host (e.g. Vercel), set `DATABASE_URL`, `SESSION_SECRET`, `MFA_ENCRYPTION_KEY`, `DEFAULT_ADMIN_EMAIL` and `DEFAULT_ADMIN_PASSWORD`. Leave `MFA_MODE` unset (defaults to `all`) and `ALLOW_DEMO_RESET` unset.
 3. `npm run build`, then `npm start` (or let the host build it).
 4. Sign in as the admin, set up the authenticator, and approve the first officers.
@@ -166,15 +172,20 @@ JSON files do not persist on serverless hosting, so `DATABASE_URL` is required t
 - Every page sends security headers that stop the dashboard being shown inside other sites and turn off camera, microphone and location access (`next.config.mjs`).
 - Login and access-request rate limits are kept in server memory. On serverless hosting each instance has its own count, so treat them as a speed bump, not a guarantee.
 
-## Known gaps
+## Tests
 
-Found while writing these docs (November 2026). Worth fixing before real use:
+```bash
+npm test
+```
 
-1. **`/api/upload` has no login check.** Anyone can ask it for a signed upload address to the S3 bucket. Nothing in either app calls it any more (the reporter app removed its own upload route), so it can be deleted, together with the `@aws-sdk/*` packages.
-2. **The `oversight` role does nothing.** Admins can grant it, but no route allows it. Either add it (read-only, like `legal`) or remove it from `/admin/staff`.
-3. **Base table definitions are missing.** Add a first migration with `CREATE TABLE` for `reports`, `staff_users`, `identity_vault` and `audit_log` so a new database can be set up from the repo alone.
-4. **`/api/hotspots` is unused and differs from the hotspot page.** The page scores reports in the browser (`lib/hotspots.js`: reviewed reports only, GPS within 250 m, weighted by type and age). The API route counts all reports with GPS within 500 m. Remove the route or make it use the same rules.
-5. **Leftover files.** `*.before-trust`, `*.before-hotspots`, `*.before-map`, `patch-trust.mjs`, `add-hotspot-map.mjs` and `archive/` are old edit scripts and backups. `public/sw.js` is not registered by any page. The login page imports `HotspotList` without using it.
-6. **No automated tests.**
+20 tests (Node's built-in runner, no database needed) covering report deadlines, hotspot scoring and authenticator codes.
+
+## Fixed in November 2026
+
+- Removed `/api/upload`, which had no login check and no callers, and the S3 packages it used.
+- `oversight` now has hotspots-only access. Hotspot scoring moved to the server (`/api/hotspots`), so the page and the API use the same rules.
+- Added the missing base-table migration and a record of the trust tables.
+- Removed old edit scripts, `.before-*` backups, an unregistered service worker and an unused import.
+- Added automated tests.
 
 Still to build (from the design spec): photos in object storage instead of the database, SMS/airtime rewards, ELMIS integration, and an AI helper that suggests a triage category for a human to confirm.

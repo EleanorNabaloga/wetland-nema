@@ -24,7 +24,7 @@ How Kuuma Obutonde works end to end. For setup, see the [README](../README.md). 
             v                                   reports     v
        +---------------------------------------------------------+
        |              Neon Postgres (one shared database)        |
-       |  reports  identity_vault  duplicate_attempts             |
+       |  reports  identity_vault  duplicate_attempts  rate_limits|
        |  staff_users  audit_log  reporter_trust  trust_events    |
        +---------------------------------------------------------+
 ```
@@ -52,7 +52,7 @@ The apps never call each other. They only share the database. Both must use the 
 
 - Session and pre-login cookies are signed tokens (HS256, `SESSION_SECRET`), `httpOnly`, `sameSite=strict`, and `secure` in production.
 - Authenticator secrets are stored encrypted (AES-256-GCM, `MFA_ENCRYPTION_KEY`). Each code works once: the last used time step is saved, so a code cannot be replayed.
-- `proxy.js` sends signed-out visitors of `/dashboard`, `/hotspots` and `/admin` to `/login`, and non-admins away from `/admin`.
+- `proxy.js` sends signed-out visitors of `/dashboard`, `/hotspots` and `/admin` to `/login`, oversight officers to `/hotspots` from anywhere else, and other non-admins away from `/admin`.
 - Every API route calls `requireRole()` (`lib/guard.js`), which looks the officer up in `staff_users` on every request. Disabling an officer takes effect at once, even if their cookie is still valid.
 
 ## Report lifecycle and deadlines
@@ -129,7 +129,7 @@ A failure in the trust score never blocks the review itself: it is logged and th
 
 ## Hotspots
 
-`lib/hotspots.js`, run in the browser on the report list.
+`lib/hotspots.js`, run on the server by `GET /api/hotspots`. Oversight officers get the result without report ids, so they never receive individual reports.
 
 1. Only **reviewed** reports with GPS accuracy of 250 m or better count.
 2. Reports are grouped into 500 m squares.

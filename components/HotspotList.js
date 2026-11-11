@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { computeHotspots, reporterOf } from "@/lib/hotspots";
 import HotspotMap from "./HotspotMap";
+import LogoutButton from "./LogoutButton";
 
 const COLORS = { red: "#ef4444", orange: "#f59e0b", yellow: "#eab308" };
 const TREND = { worsening: "Getting worse", improving: "Improving", steady: "Steady" };
@@ -16,11 +16,12 @@ const card = {
 export default function HotspotList() {
   const [hotspots, setHotspots] = useState([]);
   const [reporterKnown, setReporterKnown] = useState(true);
+  const [canOpenReports, setCanOpenReports] = useState(false);
   const [state, setState] = useState("loading");
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/reports", { cache: "no-store" });
+      const res = await fetch("/api/hotspots", { cache: "no-store" });
       if (res.status === 401 || res.status === 403) {
         setState("signin");
         return;
@@ -29,9 +30,10 @@ export default function HotspotList() {
         setState("error");
         return;
       }
-      const reports = await res.json();
-      setReporterKnown(reports.some((r) => reporterOf(r) != null));
-      setHotspots(computeHotspots(reports));
+      const data = await res.json();
+      setReporterKnown(data.reporterKnown);
+      setCanOpenReports(data.canOpenReports);
+      setHotspots(data.hotspots);
       setState("ready");
     } catch {
       setState("error");
@@ -54,7 +56,12 @@ export default function HotspotList() {
   return (
     <section>
       <p style={{ margin: "0 0 12px" }}>
-        <a className="link" href="/dashboard">Back to dashboard</a>
+        {canOpenReports && (
+          <>
+            <a className="link" href="/dashboard">Back to dashboard</a> ·{" "}
+          </>
+        )}
+        <a className="link" href="/help">Help</a> · <LogoutButton />
       </p>
       <h1 style={{ margin: "0 0 4px" }}>Most affected areas</h1>
       <p className="muted" style={{ marginTop: 0 }}>
@@ -74,7 +81,7 @@ export default function HotspotList() {
           Please <a className="link" href="/login?next=/hotspots">sign in</a> to see hotspots.
         </p>
       )}
-      {state === "error" && <p className="note" role="alert">Could not load reports. Try again.</p>}
+      {state === "error" && <p className="note" role="alert">Could not load hotspots. Try again.</p>}
       {state === "ready" && hotspots.length === 0 && (
         <p className="muted">No hotspots yet. Areas appear here once reports have been reviewed.</p>
       )}
@@ -102,7 +109,9 @@ export default function HotspotList() {
           <p className="muted" style={{ margin: "0 0 8px" }}>
             {h.lat.toFixed(4)}, {h.lng.toFixed(4)} - last report {new Date(h.lastReportAt).toLocaleDateString()}
           </p>
-          <p className="muted" style={{ margin: "0 0 8px", fontSize: 14 }}>{h.ids.join(", ")}</p>
+          {h.ids && (
+            <p className="muted" style={{ margin: "0 0 8px", fontSize: 14 }}>{h.ids.join(", ")}</p>
+          )}
           <a
             className="link"
             target="_blank"

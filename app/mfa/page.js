@@ -37,7 +37,7 @@ function Mfa() {
       });
       if (res.ok) {
         const d = await res.json();
-        router.push(d.role === "admin" ? "/admin/staff" : next);
+        router.push(d.role === "admin" ? "/admin/staff" : d.role === "oversight" ? "/hotspots" : next);
         router.refresh();
         return;
       }

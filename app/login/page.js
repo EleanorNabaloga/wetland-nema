@@ -1,6 +1,5 @@
 ﻿"use client";
 
-import HotspotList from "../../components/HotspotList";
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -37,7 +36,7 @@ function LoginForm() {
       if (res.ok) {
         const data = await res.json();
         if (data.mfa === "none")
-          router.push(data.role === "admin" ? "/admin/staff" : next);
+          router.push(data.role === "admin" ? "/admin/staff" : data.role === "oversight" ? "/hotspots" : next);
         else router.push("/mfa?next=" + encodeURIComponent(next));
         router.refresh();
         return;
