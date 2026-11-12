@@ -159,7 +159,7 @@ test("issue and pull request templates synchronization: required templates must 
     "bug_report.md",
     "feature_request.md",
     "docs_improvement.md",
-    "ai_triage_feedback.md",
+    "ai_sorting_feedback.md",
     "config.yml"
   ];
 

@@ -64,6 +64,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial staff review dashboard for environmental officers.
 - Email and password authentication with two-step authenticator setup.
-- Statutory SLA deadline tracking for acknowledgement, triage, inspection, and decisions.
+- Statutory SLA deadline tracking for acknowledgement, sorting, inspection, and decisions.
 - Hotspot spatial grid clustering (500 meter squares) with age decay and anti-Sybil damping.
 - Role-based access control for reviewer, inspector, legal, oversight, and admin staff.

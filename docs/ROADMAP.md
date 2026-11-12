@@ -9,13 +9,13 @@ This document provides a strictly verified status of all planned features for Ku
 | Feature | Source in Existing Docs | Current Status | Code Verification Reference |
 | :--- | :--- | :--- | :--- |
 | **Staff Dashboard with MFA** | `docs/design-spec.md` (NEMA action) | Completed | `app/dashboard/`, `app/login/`, `lib/totp.js`, `tests/totp.test.mjs` |
-| **Cryptographic Evidence Signing** | `docs/design-spec.md` (Track B) | Completed | `Wetland-watch/lib/evidence.js`, `lib/device.js`, `tests/evidence.test.mjs` |
-| **Perceptual Duplicate Detection** | `docs/design-spec.md` (Dedupe) | Completed | `Wetland-watch/lib/dup/`, `tests/duplicate-detection.test.mjs` |
+| **Device Evidence Signatures** | `docs/design-spec.md` (Track B) | Completed | `Wetland-watch/lib/evidence.js`, `lib/device.js`, `tests/evidence.test.mjs` |
+| **Duplicate Photo Checks** | `docs/design-spec.md` (Dedupe) | Completed | `Wetland-watch/lib/dup/`, `tests/duplicate-detection.test.mjs` |
 | **Whistleblower Vault (Zero-PII)** | `docs/design-spec.md` (Governance) | Completed | `identity_vault` table, AES-256-GCM encryption in `Wetland-watch/lib/crypto.js` |
 | **Statutory SLA State Machine** | `docs/design-spec.md` (SLA timers) | Completed | `lib/sla.js`, `tests/sla.test.mjs` |
 | **Hotspot Geospatial Clustering** | `docs/design-spec.md` (Community Signal) | Completed | `lib/hotspots.js`, `app/hotspots/`, `tests/hotspots.test.mjs` |
-| **AI Severity Triage (Job 1)** | `docs/ai.md` (Build order: Job 1) | Completed | `lib/ai/fallbackEngine.js`, `app/api/cron/ai-worker/`, `tests/ai_engine.test.mjs` |
-| **Officer Triage Feedback Loop** | `docs/ai.md` (Job 1: Triage by severity) | Completed | `app/api/reports/[id]/route.js` (`officer_action` accepted or overridden) |
+| **AI Severity Sorting (Job 1)** | `docs/ai.md` (Build order: Job 1) | Completed | `lib/ai/fallbackEngine.js`, `app/api/cron/ai-worker/`, `tests/ai_engine.test.mjs` |
+| **Officer Sorting Feedback Loop** | `docs/ai.md` (Job 1: Sort by severity) | Completed | `app/api/reports/[id]/route.js` (`officer_action` accepted or overridden) |
 | **Repository Merge Safeguards** | `docs/BRANCH_PROTECTION.md` | Completed | `.github/workflows/merge-guard.yml`, `.githooks/pre-push`, `CODEOWNERS` |
 | **Object Storage for Photos** | `README.md` (Still to build) | Planned | Tracked in Phase 2 |
 | **Automated Airtime Rewards** | `docs/design-spec.md` (Rewards) | Planned | Tracked in Phase 2 |
@@ -39,11 +39,11 @@ This document provides a strictly verified status of all planned features for Ku
   - `lib/totp.js`: RFC 6238 time-based one-time password verification with AES-256-GCM encrypted secrets and replay protection.
   - `tests/totp.test.mjs`: 6 unit tests validating token step drift and replay rejection.
 
-### B. Hardware-Backed Cryptographic Evidence Signing
+### B. Hardware-Backed Device Evidence Signing
 - **Documentation Reference**: `docs/design-spec.md` (Track B: Evidence-Grade Case).
 - **Implementation**:
   - `Wetland-watch/lib/device.js`: Web Crypto API generating non-exportable ECDSA P-256 private keys in browser IndexedDB.
-  - `Wetland-watch/lib/evidence.js`: Canonical evidence payload reconstruction and cryptographic signature verification.
+  - `Wetland-watch/lib/evidence.js`: Canonical evidence payload reconstruction and digital signature verification.
   - `Wetland-watch/tests/evidence.test.mjs`: 9 unit tests verifying signature integrity and tampering rejection.
 
 ### C. Multi-Stage Duplicate Photo Detection
@@ -59,15 +59,15 @@ This document provides a strictly verified status of all planned features for Ku
   - `Wetland-watch/lib/crypto.js`: AES-256-GCM encryption for stored telephone numbers.
   - `app/api/reports/route.js`: Queries select only `COALESCE(i.claimed, false) AS claimed`, never exposing personal phone numbers to dashboard users.
 
-### E. AI Severity Triage Pipeline (Job 1)
-- **Documentation Reference**: `docs/ai.md` (Build order: Job 1, Severity triage).
+### E. AI Severity Sorting Pipeline (Job 1)
+- **Documentation Reference**: `docs/ai.md` (Build order: Job 1).
 - **Implementation**:
-  - `lib/ai/fallbackEngine.js`: 4-tier fallback hierarchy (Tier 1 Cloud REST, Tier 2 Local INT8, Tier 3 Luganda and English heuristics, Tier 4 Base SLA type weights). Includes coordinate quantization (~110 meters) and contact detail scrubbing.
+  - `lib/ai/fallbackEngine.js`: 4-tier fallback system (Tier 1 Cloud REST, Tier 2 Local CPU small model, Tier 3 Luganda, Runyankole, Acholi, Kiswahili and English word rules, Tier 4 Base SLA type weights). Includes coordinate rounding (~110 meters) and contact detail scrubbing.
   - `db/migrations/20261115_ai_jobs_queue.sql`: Production DDL creating `ai_triage_queue` and `ai_assessments`.
   - `app/api/cron/ai-worker/route.js`: Non-blocking background worker with short-lived database leases.
-  - `app/dashboard/page.js`: Surfaces AI recommendation card and suggestion badge with one-click officer acceptance.
+  - `app/dashboard/page.js`: Surfaces helpful AI suggestion card and badge with one-click officer acceptance.
   - `app/api/reports/[id]/route.js`: Tracks officer agreement (`officer_action`: `accepted` or `overridden`) in `ai_assessments` and `audit_log`.
-  - `tests/ai_engine.test.mjs`: 6 automated tests validating coordinate quantization, contact scrubbing, Luganda keywords, tier transitions, and empty input handling.
+  - `tests/ai_engine.test.mjs`: 8 automated tests validating coordinate rounding, contact scrubbing, Luganda keywords, tier transitions, and empty input handling.
 
 ---
 

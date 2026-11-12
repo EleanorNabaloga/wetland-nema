@@ -50,5 +50,5 @@ npm run build
 ## 4. Engineering and Quality Standards
 - **Regression Prevention**: Never break existing SLA stages, review gates, or hotspot calculations. Verify existing unit tests before submitting changes.
 - **Structured Logging**: Route errors through `lib/observability.js`. Expected validations (such as rate limits or invalid inputs) emit structured warnings without alerting error trackers. System crashes emit structured error logs.
-- **Privacy at Rest and in Logs**: Never write personal identifiers (names, phone numbers, email addresses, or unquantized coordinates) to log outputs.
+- **Privacy at Rest and in Logs**: Never write personal details (names, phone numbers, email addresses, or exact coordinates) to log outputs.
 - **Clean Communication**: User-facing copy in staff panels and forms must use plain, simple everyday English.

@@ -6,7 +6,7 @@ This document provides a comprehensive technical overview of Kuuma Obutonde, det
 
 ## 1. Multi-Application Ecosystem
 
-The platform separates public incident intake from internal staff triage. The components do not communicate via direct HTTP calls; they synchronize exclusively through a shared PostgreSQL data plane.
+The platform separates public incident intake from internal staff sorting and review. The components do not communicate via direct HTTP calls; they synchronize exclusively through a shared PostgreSQL data plane.
 
 ```mermaid
 flowchart TD
@@ -34,16 +34,16 @@ flowchart TD
     Reports -->|Inserts pending job| AiQueue
     CronWorker -->|Leases batch with timeout| AiQueue
     CronWorker -->|Executes fallback tiers| Engine
-    Engine -->|Writes recommendation| AiAssessments
-    DashboardClient -->|Reads report and AI recommendation| Reports
-    DashboardClient -->|Updates triage category| Reports
+    Engine -->|Writes suggestion| AiAssessments
+    DashboardClient -->|Reads report and AI suggestion| Reports
+    DashboardClient -->|Updates sort category| Reports
     DashboardClient -->|Appends immutable log| Audit
 ```
 
 ### Data Boundary and Ownership Invariants
 - **Public Domain**: The reporter app (`Wetland-watch`) owns initial report creation and citizen reward identity. Personal identifiers are restricted to `identity_vault`.
 - **Administrative Domain**: The staff dashboard (`wetland-nema`) owns review fields (`status`, `viewed_at`, `reviewed_by`, `triage_category`, `triaged_at`, `inspected_at`, `outcome`, `decided_at`) and all staff authentication records.
-- **Audit Domain**: `audit_log` is append-only. Staff actions (triage, inspection, outcome updates, and account modifications) are committed within the same database transaction as the underlying change.
+- **Audit Domain**: `audit_log` is append-only. Staff actions (sorting, inspection, outcome updates, and account modifications) are committed within the same database transaction as the underlying change.
 
 ---
 
@@ -122,7 +122,7 @@ stateDiagram-v2
 
 ### Statutory Deadlines from Time of Receipt
 1. **Acknowledgement Stage**: Due within 2 days. Marked as viewed by an authorized officer.
-2. **Triage Stage**: Due within 7 days. Assigned an operational category (Emergency, Enforcement, Referral, Duplicate, Insufficient).
+2. **Sorting Stage**: Due within 7 days. Assigned an operational category (Emergency, Enforcement, Referral, Duplicate, Insufficient).
 3. **Inspection Stage**:
    - Emergency category: Due within 3 days.
    - Enforcement category: Due within 30 days.
@@ -130,9 +130,9 @@ stateDiagram-v2
 
 ---
 
-## 4. AI Triage Queue and Micro-Transaction Engine
+## 4. AI Sorting Queue and Micro-Transaction Engine
 
-The background AI triage subsystem runs asynchronously without blocking HTTP report ingestion or holding database locks during external inference.
+The background AI sorting subsystem runs asynchronously without blocking HTTP report ingestion or holding database locks during external model calls.
 
 ```mermaid
 sequenceDiagram
@@ -147,12 +147,12 @@ sequenceDiagram
     Ingestion->>Queue: INSERT INTO ai_triage_queue (report_id, 'pending')
     Note over Cron: Periodic cron execution (e.g. every minute)
     Cron->>Queue: Lease micro-batch (UPDATE ... status='processing' FOR UPDATE SKIP LOCKED)
-    Note over Cron,Fallback: External inference runs OUT-OF-BAND (no open database transaction)
+    Note over Cron,Fallback: External checks run OUT-OF-BAND (no open database transaction)
     Cron->>Fallback: Execute fallback tiers (1 to 4)
-    Fallback-->>Cron: Recommendation payload (severity, category, confidence, reason)
+    Fallback-->>Cron: Suggestion payload (severity, category, confidence, reason)
     Cron->>Assessments: INSERT INTO ai_assessments (atomic write-back)
     Cron->>Queue: UPDATE ai_triage_queue SET status='completed'
-    Staff->>Assessments: Query active recommendation
+    Staff->>Assessments: Query active suggestion
     Staff->>Assessments: Update officer_action ('accepted' or 'overridden')
 ```
 
