@@ -91,6 +91,31 @@ Changes run in one transaction with audit entries (`VIEWED_REPORT`, `TRIAGED`, `
 ### `GET /api/reports/[id]/photo` (staff)
 The photo as an image (cached privately for a day), or a redirect if it is stored as an https link.
 
+### `GET /api/reports/[id]/inspection` (staff)
+Returns the latest Section 107 field inspection record for the report, or `{ "inspection": null }`.
+
+### `POST /api/reports/[id]/inspection` (inspector, admin)
+Records an official Section 107 on-site physical inspection by an authorized ranger.
+
+```json
+{
+  "lat": 0.3150,
+  "lng": 32.5810,
+  "certificateNumber": "NEMA/SEC107/2026/0142",
+  "waterPh": 4.5,
+  "waterClarity": "chemical_opaque",
+  "odor": "chemical_solvent",
+  "findingsSummary": "Acidic effluent discharge detected from nearby textile plant.",
+  "actionRecommended": "stop_notice",
+  "photoUrl": "https://..."
+}
+```
+
+- Verifies ranger GPS coordinates are within 200 meters of the reported wetland spot (returns 422 if distance exceeds 200m).
+- Updates report status (`inspected_at`, `inspected_by`).
+- Writes an audit log entry `RECORDED_SECTION_107_INSPECTION`.
+- Returns `{ "ok": true, "inspectionId": "...", "distanceM": 45 }` with status 201.
+
 ## Trust
 
 ### `GET /api/trust?report=<id>` (staff)
@@ -103,7 +128,7 @@ Trust score of the phone that sent the report, or `null` if the report has no de
 ## Hotspots
 
 ### `GET /api/hotspots` (staff, oversight)
-Ranked hotspots from the latest 5000 reports, scored on the server (rules in [architecture.md](architecture.md#hotspots)).
+Ranked hotspots from the latest 5000 reports, scored on the server (rules in [architecture.md](architecture.md#5-hotspot-scoring-algorithm)).
 
 ```json
 {
@@ -137,3 +162,41 @@ Up to 200 staff accounts, pending first: `email, name, role, status, createdAt, 
 | `disable` | active | disabled |
 
 Admins cannot change their own account or other admin accounts.
+
+## Background Jobs and AI Workers
+
+### `GET /api/cron/ai-worker` / `POST /api/cron/ai-worker`
+Asynchronously processes pending items in `ai_triage_queue` using the 4-tier fallback engine.
+
+- **Authentication**: Optional `Authorization: Bearer <CRON_SECRET>`. If `CRON_SECRET` is defined in `.env.local`, requests without the matching bearer token return 401 Unauthorized.
+- **Concurrency**: Leases up to 5 jobs at a time using short-lived non-blocking database transactions.
+- **Response**:
+```json
+{
+  "processed": 3,
+  "totalJobs": 3,
+  "success": true
+}
+```
+If tables are not yet initialized or in local demo mode, returns `{ "processed": 0, "status": "ai_tables_not_ready" }`.
+
+## System Configuration
+
+### `GET /api/config/settings` (staff)
+Returns the active system settings (SLA deadlines, hotspot weights, duplicate limits, camera advisory limits, and language keyword lists).
+
+### `PATCH /api/config/settings` (admin)
+Updates a dynamic system setting without redeploying code.
+
+```json
+{
+  "key": "sla_limits",
+  "value": {
+    "acknowledge_days": 2,
+    "triage_days": 7,
+    "inspect_emergency_days": 3,
+    "inspect_routine_days": 30,
+    "decide_days": 45
+  }
+}
+```

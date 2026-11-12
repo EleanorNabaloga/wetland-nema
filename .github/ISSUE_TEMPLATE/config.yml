@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security Vulnerability Disclosure
+    url: https://github.com/EleanorNabaloga/wetland-nema/blob/main/SECURITY.md
+    about: Please report security vulnerabilities privately according to our security policy.
+  - name: NEMA Environmental Whistleblower Portal
+    url: https://wetland-watch.vercel.app
+    about: To submit an environmental pollution or wetland degradation report, use the official reporter app.

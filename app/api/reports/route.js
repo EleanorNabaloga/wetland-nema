@@ -1,7 +1,8 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { query, withTransaction, logAudit } from "@/lib/db";
 import { requireRole } from "@/lib/guard";
-import { signatureStatusSql } from "@/lib/schema";
+import { signatureStatusSql, aiJoinSql } from "@/lib/schema";
+import { getSystemSettings, applyAiDisplayMode } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,7 @@ export async function GET(req) {
     if (!(await requireRole(req, STAFF_ROLES)))
       return json({ error: "Unauthorized" }, 401);
     const sigSql = await signatureStatusSql();
+    const ai = await aiJoinSql();
     const res = await query(
       `SELECT r.id, r.lat, r.lng, r.acc, r.ts, r.type, r.note, (r.photo_url IS NOT NULL AND r.photo_url <> '') AS "hasPhoto", r.hash, ${sigSql},
               r.source, r.location_source AS "locationSource", r.time_source AS "timeSource",
@@ -21,11 +23,14 @@ export async function GET(req) {
               r.triage_category AS category, r.triaged_at AS "triagedAt", r.triaged_by AS "triagedBy",
               r.inspected_at AS "inspectedAt", r.inspected_by AS "inspectedBy", r.decided_at AS "decidedAt",
               (EXTRACT(EPOCH FROM r.received_at) * 1000)::double precision AS "receivedAt",
-              COALESCE(i.claimed, false) AS claimed
-       FROM reports r LEFT JOIN identity_vault i ON i.report_id = r.id
+              COALESCE(i.claimed, false) AS claimed ${ai.select}
+       FROM reports r 
+       LEFT JOIN identity_vault i ON i.report_id = r.id
+       ${ai.join}
        ORDER BY r.received_at DESC LIMIT 500`,
     );
-    return json(res.rows);
+    const settings = await getSystemSettings().catch(() => null);
+    return json(applyAiDisplayMode(res.rows, settings));
   } catch (error) {
     console.error(error);
     return json({ error: "Server error" }, 500);

@@ -1,151 +1,179 @@
-# Architecture
+# System Architecture
 
-How Kuuma Obutonde works end to end. For setup, see the [README](../README.md). For each API route, see [api.md](api.md).
+This document provides a comprehensive technical overview of Kuuma Obutonde, detailing the data contracts, authentication protocols, statutory report lifecycles, and asynchronous processing pipelines across both applications.
 
-## The two apps
+---
 
-```
-  Public (phone)                                   NEMA officers (laptop)
-       |                                                   |
-       v                                                   v
- +---------------------+                        +----------------------+
- | Reporter app        |                        | Staff dashboard      |
- | Wetland-watch       |                        | wetland-nema         |
- | Next.js, PWA        |                        | Next.js              |
- | port 3000           |                        | port 3001            |
- |                     |                        |                      |
- | - take photo, GPS   |                        | - login + MFA        |
- | - sign evidence     |                        | - review, triage     |
- | - duplicate checks  |                        | - deadlines (SLA)    |
- | - status, rewards   |                        | - trust, hotspots    |
- +----------+----------+                        +-----------+----------+
-            |  creates reports                  reads and   |
-            |  stores reward phone (encrypted)  updates     |
-            v                                   reports     v
-       +---------------------------------------------------------+
-       |              Neon Postgres (one shared database)        |
-       |  reports  identity_vault  duplicate_attempts  rate_limits|
-       |  staff_users  audit_log  reporter_trust  trust_events    |
-       +---------------------------------------------------------+
-```
+## 1. Multi-Application Ecosystem
 
-The apps never call each other. They only share the database. Both must use the same `DATABASE_URL`.
+The platform separates public incident intake from internal staff triage. The components do not communicate via direct HTTP calls; they synchronize exclusively through a shared PostgreSQL data plane.
 
-**Ownership rule:** the reporter app creates reports and owns everything the public sends. The dashboard only updates review fields (`status`, `viewed_at`, `reviewed_by`, `triage_category`, `triaged_*`, `inspected_*`, `outcome`, `decided_at`) and owns the staff, audit and trust tables.
+```mermaid
+flowchart TD
+    subgraph ClientLayer["Intake Layer (Public)"]
+        ReporterClient["Citizen Reporter PWA (Wetland-watch)"]
+    end
 
-## Signing in
+    subgraph StorageLayer["Data Layer (Neon Postgres)"]
+        Reports["reports table"]
+        AiQueue["ai_triage_queue table"]
+        AiAssessments["ai_assessments table"]
+        Vault["identity_vault table"]
+        Audit["audit_log table"]
+        Staff["staff_users table"]
+    end
 
-```
-/login  --email + password-->  POST /api/auth/login
-                                 |
-             MFA not needed -----+----- MFA needed (default)
-                   |                         |
-          session cookie (8 h)      short "pre" cookie (10 min)
-                   |                         |
-                   |                  /mfa  GET /api/auth/mfa
-                   |                    first time: QR code to scan
-                   |                         |
-                   |                  POST /api/auth/mfa  (6-digit code)
-                   |                         |
-                   +------------> session cookie (8 h) --> /dashboard
+    subgraph StaffLayer["Staff Layer (Internal)"]
+        DashboardClient["NEMA Staff Dashboard (wetland-nema)"]
+        CronWorker["AI Worker: /api/cron/ai-worker"]
+        Engine["4-Tier AI Fallback Engine"]
+    end
+
+    ReporterClient -->|POST /api/reports| Reports
+    ReporterClient -->|Stores phone for rewards| Vault
+    Reports -->|Inserts pending job| AiQueue
+    CronWorker -->|Leases batch with timeout| AiQueue
+    CronWorker -->|Executes fallback tiers| Engine
+    Engine -->|Writes recommendation| AiAssessments
+    DashboardClient -->|Reads report and AI recommendation| Reports
+    DashboardClient -->|Updates triage category| Reports
+    DashboardClient -->|Appends immutable log| Audit
 ```
 
-- Session and pre-login cookies are signed tokens (HS256, `SESSION_SECRET`), `httpOnly`, `sameSite=strict`, and `secure` in production.
-- Authenticator secrets are stored encrypted (AES-256-GCM, `MFA_ENCRYPTION_KEY`). Each code works once: the last used time step is saved, so a code cannot be replayed.
-- `proxy.js` sends signed-out visitors of `/dashboard`, `/hotspots` and `/admin` to `/login`, oversight officers to `/hotspots` from anywhere else, and other non-admins away from `/admin`.
-- Every API route calls `requireRole()` (`lib/guard.js`), which looks the officer up in `staff_users` on every request. Disabling an officer takes effect at once, even if their cookie is still valid.
+### Data Boundary and Ownership Invariants
+- **Public Domain**: The reporter app (`Wetland-watch`) owns initial report creation and citizen reward identity. Personal identifiers are restricted to `identity_vault`.
+- **Administrative Domain**: The staff dashboard (`wetland-nema`) owns review fields (`status`, `viewed_at`, `reviewed_by`, `triage_category`, `triaged_at`, `inspected_at`, `outcome`, `decided_at`) and all staff authentication records.
+- **Audit Domain**: `audit_log` is append-only. Staff actions (triage, inspection, outcome updates, and account modifications) are committed within the same database transaction as the underlying change.
 
-## Report lifecycle and deadlines
+---
 
-Defined in `lib/sla.js`. Each stage's deadline counts from when the report was **received**.
+## 2. Staff Authentication and Session Lifecycle
 
+Staff authentication requires two-factor authentication (TOTP) to protect sensitive environmental enforcement records.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Officer as Staff Officer
+    participant Browser as Browser Client
+    participant AuthAPI as /api/auth/login
+    participant MfaAPI as /api/auth/mfa
+    participant DB as staff_users Table
+
+    Officer->>Browser: Submit email and password
+    Browser->>AuthAPI: POST /api/auth/login
+    AuthAPI->>DB: Query user by email
+    AuthAPI->>AuthAPI: Verify bcrypt password hash
+    alt TOTP Enabled
+        AuthAPI-->>Browser: Issue short-lived pre-session cookie (10 min)
+        Browser->>Officer: Prompt for 6-digit authenticator code
+        Officer->>Browser: Submit 6-digit code
+        Browser->>MfaAPI: POST /api/auth/mfa
+        MfaAPI->>DB: Read encrypted secret (AES-256-GCM)
+        MfaAPI->>MfaAPI: Verify TOTP code and check replay step
+        MfaAPI-->>Browser: Issue full session cookie (8 hours)
+    else First-time MFA Setup
+        AuthAPI-->>Browser: Issue setup pre-session cookie
+        Browser->>MfaAPI: GET /api/auth/mfa (generates secret and QR code)
+        Officer->>Browser: Scan QR code and verify initial code
+        MfaAPI->>DB: Save encrypted secret and set totp_enabled = true
+        MfaAPI-->>Browser: Issue full session cookie (8 hours)
+    end
+    Browser->>Officer: Redirect to /dashboard
 ```
- new  --Mark as reviewed-->  viewed
-                               |
-                     pick triage category
-            +------------------+-------------------+
-            |                                      |
-   Emergency / Enforcement            Referral / Duplicate / Insufficient
-            |                                      |
-     Mark as inspected                             |
-            |                                      |
-            +-----------> pick next step <---------+
-                          (outcome, decided_at)
-                                 |
-                                done
+
+### Authentication Invariants
+- Session tokens are cryptographically signed with HS256 using `SESSION_SECRET`.
+- Cookies enforce `httpOnly: true`, `sameSite: "strict"`, and `secure: true` in production.
+- Failed login attempts trigger an exponential backoff lock in memory after 5 consecutive failures.
+- `proxy.js` intercepts unauthenticated requests to protected paths (`/dashboard`, `/hotspots`, `/admin`), redirecting officers to `/login`.
+
+---
+
+## 3. Statutory SLA Lifecycle and State Machine
+
+Report progression is governed by the state machine in `lib/sla.js`, enforcing statutory timelines under the National Environment Act of Uganda.
+
+```mermaid
+stateDiagram-v2
+    [*] --> New: Report Received
+    New --> Viewed: Officer reviews evidence
+    Viewed --> Triaged: Select category
+
+    state Triaged {
+        direction LR
+        Emergency
+        Enforcement
+        Referral
+        Duplicate
+        Insufficient
+    }
+
+    Emergency --> Inspected: Mandatory field inspection
+    Enforcement --> Inspected: Mandatory field inspection
+
+    Inspected --> Decided: Next step selected
+    Referral --> Decided: Next step selected
+    Duplicate --> Decided: Next step selected
+    Insufficient --> Decided: Next step selected
+
+    Decided --> [*]: Case Closed
 ```
 
-| Stage | Done when | Deadline from receipt |
-| --- | --- | --- |
-| Acknowledge | Marked as reviewed | 2 days |
-| Triage | Category chosen | 7 days |
-| Inspect (Emergency, Enforcement only) | Marked as inspected | 3 days for Emergency, 30 days for Enforcement |
-| Decide | Next step chosen | 45 days |
+### Statutory Deadlines from Time of Receipt
+1. **Acknowledgement Stage**: Due within 2 days. Marked as viewed by an authorized officer.
+2. **Triage Stage**: Due within 7 days. Assigned an operational category (Emergency, Enforcement, Referral, Duplicate, Insufficient).
+3. **Inspection Stage**:
+   - Emergency category: Due within 3 days.
+   - Enforcement category: Due within 30 days.
+4. **Final Regulatory Decision**: Due within 45 days. Outcome selected (Inspector will visit, Referred to another agency, Need more information).
 
-These limits are placeholders to agree with NEMA before the pilot.
+---
 
-Rules the server enforces (`PATCH /api/reports/[id]`):
+## 4. AI Triage Queue and Micro-Transaction Engine
 
-- A report must be reviewed before it can be triaged, inspected or given a next step.
-- Inspection is only allowed for Emergency and Enforcement.
-- The next step can be cleared again (which clears `decided_at`).
-- Every change is written to `audit_log` in the same transaction.
+The background AI triage subsystem runs asynchronously without blocking HTTP report ingestion or holding database locks during external inference.
 
-## Evidence fields
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Ingestion as POST /api/reports
+    participant Queue as ai_triage_queue
+    participant Cron as /api/cron/ai-worker
+    participant Fallback as 4-Tier Fallback Engine
+    participant Assessments as ai_assessments
+    participant Staff as Staff Dashboard UI
 
-What the dashboard shows about how trustworthy a photo is. All set by the reporter app.
+    Ingestion->>Queue: INSERT INTO ai_triage_queue (report_id, 'pending')
+    Note over Cron: Periodic cron execution (e.g. every minute)
+    Cron->>Queue: Lease micro-batch (UPDATE ... status='processing' FOR UPDATE SKIP LOCKED)
+    Note over Cron,Fallback: External inference runs OUT-OF-BAND (no open database transaction)
+    Cron->>Fallback: Execute fallback tiers (1 to 4)
+    Fallback-->>Cron: Recommendation payload (severity, category, confidence, reason)
+    Cron->>Assessments: INSERT INTO ai_assessments (atomic write-back)
+    Cron->>Queue: UPDATE ai_triage_queue SET status='completed'
+    Staff->>Assessments: Query active recommendation
+    Staff->>Assessments: Update officer_action ('accepted' or 'overridden')
+```
 
-| Field | Meaning |
-| --- | --- |
-| `hash` | Fingerprint of the photo taken on the phone |
-| `signature_status` | `verified`: signed by the phone's key and checked on arrival. `unsigned`: older phone. Empty: sent before signature checks. |
-| `device_public_key` | Anonymous key, one per phone. Also used as the reporter's identity for trust scores. |
-| `source` | Taken live in the app, or chosen from the gallery (flagged) |
-| `location_source`, `time_source` | Where the location and time came from (GPS, photo data, phone clock) |
-| `acc` | GPS accuracy in metres |
-| `dup_status`, `dup_of`, `case_id` | Duplicate check result from the reporter app: `accept`, `group` (same incident, shares a case), `flag` (photo may be reused) |
+### Transaction Isolation Rule
+Connection poolers (such as Neon pgbouncer) terminate long-running idle transactions. Therefore, queue leasing, model inference, and assessment write-back are separated into three discrete micro-transactions:
+1. **Lease Transaction** (under 15 milliseconds): Selects and locks pending rows using `FOR UPDATE SKIP LOCKED`.
+2. **Out-of-Band Execution** (1 to 10 seconds): Performs multimodal inference or local fallback without holding database connections.
+3. **Write-Back Transaction** (under 15 milliseconds): Writes the assessment record and marks the queue entry completed.
 
-## Reporter trust score
+---
 
-`lib/trust.js`. One score per phone (`device_public_key`), from 0 to 100, starting at 40.
+## 5. Hotspot Scoring Algorithm
 
-| Event | Trigger | Change |
-| --- | --- | --- |
-| `report_verified` | Triaged as Emergency, Enforcement or Referral | +3, smaller as the score grows |
-| `duplicate_upload` | Triaged as Duplicate | -10 |
-| `report_false` | Officer clicks "Mark as false report" | -20 |
-| none | Triaged as Insufficient | no change (not the reporter's fault) |
+Hotspots are computed server-side in `lib/hotspots.js` to surface regional environmental degradation clusters:
 
-Each report changes the score only once, except that marking a report false always counts, even after it was verified.
-
-| Level | Rule |
-| --- | --- |
-| `restricted` | score below 20 |
-| `new` | fewer than 5 verified reports |
-| `trusted` | score 70 or more |
-| `standard` | everyone else |
-
-A failure in the trust score never blocks the review itself: it is logged and the review goes ahead.
-
-## Hotspots
-
-`lib/hotspots.js`, run on the server by `GET /api/hotspots`. Oversight officers get the result without report ids, so they never receive individual reports.
-
-1. Only **reviewed** reports with GPS accuracy of 250 m or better count.
-2. Reports are grouped into 500 m squares.
-3. Each report is weighted by type (sewage and chemicals 8; burning, drainage, encroachment, wildlife, vegetation 4; rubbish and plastic 2; other 1) and halves in weight every 14 days.
-4. Extra reports from the same phone in the same square count only 10%, so one person cannot create a hotspot alone.
-5. Squares scoring under 4 are hidden. 16 or more is red, 8 or more orange, otherwise yellow. A square with only one reporter is always yellow.
-6. Trend compares the last 14 days with the 14 before: worsening, steady or improving.
-
-Weights and limits are constants at the top of the file.
-
-## Demo mode
-
-With no `DATABASE_URL` (or `USE_LOCAL_DEMO_FALLBACK=true`), `lib/db.js` stores everything in `data/*.json`. It answers only the SQL statements the app already uses, by matching their shape. New queries need a matching branch in `jsonQuery()` or they return nothing in demo mode. Demo mode is for a single developer machine only: files do not persist on serverless hosts.
-
-## Performance choices
-
-- The report list leaves out photos (they were about 97% of its size). The dashboard loads each photo from `/api/reports/[id]/photo`, which the browser keeps for a day.
-- The dashboard refreshes the list every 30 seconds.
-- The Postgres pool is kept on `global` so it is reused across requests and hot reloads.
+1. **Eligibility Filter**: Only reviewed reports with GPS accuracy of 250 meters or better are included.
+2. **Spatial Partitioning**: Coordinates are mapped into 500-meter grid squares.
+3. **Temporal Decay**: Reports decay exponentially, losing 50 percent of their weight every 14 days.
+4. **Anti-Sybil Damping**: Additional reports from the same device public key in the same grid square count for only 10 percent of their normal weight. A single reporter can never trigger a critical (red) hotspot alone.
+5. **Score Tiers**:
+   - Score under 4: Hidden from summary list.
+   - Score 4 to 7: Low priority (yellow).
+   - Score 8 to 15: Medium priority (orange).
+   - Score 16 and above: Critical priority (red).

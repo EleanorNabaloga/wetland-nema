@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ago } from "@/lib/format";
@@ -21,10 +21,18 @@ const JSON_HEADERS = { "Content-Type": "application/json" };
 const IS_DEMO = process.env.NODE_ENV !== "production";
 const OVERDUE = { background: "#7f1d1d", color: "#fecaca" };
 
+function fmtCoord(val, digits = 4) {
+  const n = Number(val);
+  return Number.isFinite(n) ? n.toFixed(digits) : "N/A";
+}
+
 function mapUrl(r) {
+  const lat = Number(r?.lat);
+  const lng = Number(r?.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   const d = 0.0025;
-  const bbox = [r.lng - d, r.lat - d, r.lng + d, r.lat + d].join("%2C");
-  return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${r.lat}%2C${r.lng}`;
+  const bbox = [lng - d, lat - d, lng + d, lat + d].join("%2C");
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat}%2C${lng}`;
 }
 // Time between the photo being taken and the report reaching NEMA. Only
 // meaningful when the time came from the photo itself (gallery uploads, or
@@ -251,10 +259,18 @@ export default function Dashboard() {
                   </span>
                   <br />
                   <span className="muted">
-                    {r.lat.toFixed(4)}, {r.lng.toFixed(4)} · {ago(r.ts)}
+                    {fmtCoord(r.lat, 4)}, {fmtCoord(r.lng, 4)} · {ago(r.ts)}
                   </span>
                   <br />
                   <SlaBadge r={r} />
+                  {r.aiCategory && !r.category && (
+                    <>
+                      {" "}
+                      <span className="badge" style={{ background: "#e0f2fe", color: "#0369a1", border: "1px solid #bae6fd" }}>
+                        Suggested: {r.aiCategory}
+                      </span>
+                    </>
+                  )}
                   {captureDelay(r) > OLD_PHOTO_MS && (
                     <>
                       {" "}
@@ -294,12 +310,16 @@ export default function Dashboard() {
               {(sel.hasPhoto ?? Boolean(sel.photo)) && (
                 <img className="photo" alt="Evidence photo" src={`/api/reports/${encodeURIComponent(sel.id)}/photo`} />
               )}
-              <iframe
-                key={sel.id}
-                title="Map of where the photo was taken"
-                loading="lazy"
-                src={mapUrl(sel)}
-              />
+              {mapUrl(sel) ? (
+                <iframe
+                  key={sel.id}
+                  title="Map of where the photo was taken"
+                  loading="lazy"
+                  src={mapUrl(sel)}
+                />
+              ) : (
+                <p className="muted" style={{ padding: 16 }}>Coordinates not available</p>
+              )}
               <p className="note">
                 <a
                   className="link"
@@ -318,7 +338,7 @@ export default function Dashboard() {
                 <dd>{sel.note || "None"}</dd>
                 <dt>Coordinates</dt>
                 <dd>
-                  {sel.lat.toFixed(6)}, {sel.lng.toFixed(6)}
+                  {fmtCoord(sel.lat, 6)}, {fmtCoord(sel.lng, 6)}
                 </dd>
                 <dt>GPS accuracy</dt>
                 <dd>
@@ -378,7 +398,7 @@ export default function Dashboard() {
                   {when(sel.viewedAt)}
                   {sel.reviewedBy ? " by " + sel.reviewedBy : ""}
                 </dd>
-                <dt>Triaged</dt>
+                <dt>Sorted</dt>
                 <dd>
                   {sel.category
                     ? sel.category + " · " + when(sel.triagedAt)
@@ -443,12 +463,44 @@ export default function Dashboard() {
                 </button>
               )}
 
+              {sel.aiCategory && (
+                <div
+                  style={{
+                    background: "rgba(2, 132, 199, 0.08)",
+                    border: "1px solid rgba(2, 132, 199, 0.25)",
+                    borderRadius: 12,
+                    padding: "10px 14px",
+                    margin: "12px 0",
+                  }}
+                >
+                  <div style={{ fontWeight: 600, fontSize: "0.875rem", color: "#0369a1" }}>
+                    Helpful Suggestion: {sel.aiCategory}
+                    {sel.aiConfidence != null && ` (${Math.round(sel.aiConfidence * 100)}% confidence)`}
+                  </div>
+                  {sel.aiReason && (
+                    <div style={{ fontSize: "0.8125rem", color: "#475569", marginTop: 4 }}>
+                      {sel.aiReason}
+                    </div>
+                  )}
+                  {reviewed && !sel.category && (
+                    <button
+                      type="button"
+                      className="ghost"
+                      style={{ marginTop: 8, padding: "4px 10px", fontSize: "0.8125rem" }}
+                      onClick={() => act(sel.id, { category: sel.aiCategory })}
+                    >
+                      Accept {sel.aiCategory}
+                    </button>
+                  )}
+                </div>
+              )}
+
               <label
                 className="label"
                 htmlFor="cat"
                 style={{ display: "block" }}
               >
-                Triage category
+                Priority category
               </label>
               <select
                 id="cat"
@@ -498,7 +550,7 @@ export default function Dashboard() {
               </select>
               {!reviewed && (
                 <p className="note">
-                  Review the report first to triage it and set a next step.
+                  Review the report first to sort it and set a next step.
                 </p>
               )}
             </>
