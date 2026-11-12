@@ -83,7 +83,7 @@ export default function HelpPage() {
   return (
     <main style={wrap}>
       <p>
-        <a className="link" href="/login">← Back to sign in</a>
+        <a className="link" href="/login">Back to sign in</a>
       </p>
       <h1>How to use the NEMA dashboard</h1>
       <p className="muted">
@@ -299,7 +299,7 @@ export default function HelpPage() {
       </section>
 
       <p>
-        <a className="link" href="/login">Go to sign in →</a>
+        <a className="link" href="/login">Go to sign in</a>
       </p>
     </main>
   );
