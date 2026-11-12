@@ -6,14 +6,14 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Security Policy](https://img.shields.io/badge/security-policy-informational.svg)](SECURITY.md)
 
-Kuuma Obutonde is an open-source environmental incident response and wetland monitoring system operating in Uganda. The platform enables environmental officers to triage citizen incident reports, track statutory deadlines, identify critical degradation hotspots, and deploy enforcement operations.
+Kuuma Obutonde is an open-source environmental incident response and wetland monitoring system operating in Uganda. The platform helps environmental officers review and sort citizen incident reports, track statutory deadlines, spot critical wetland harm hotspots, and coordinate field checks.
 
 The system is organized into two cooperating applications that connect to a shared PostgreSQL database:
 
 | Component | Repository | Target Users | Operational Purpose |
 | :--- | :--- | :--- | :--- |
-| **Citizen Reporter** | [Wetland-watch](https://github.com/EleanorNabaloga/Wetland-watch) | General Public | Captures incident photos, signs hardware-backed evidence, submits reports, and verifies reward status. |
-| **Staff Dashboard** | **wetland-nema** (this repository) | NEMA Officers & Legal Staff | Staff authentication with MFA, 4-tier AI triage processing, SLA tracking, hotspot clustering, and audit logging. |
+| **Citizen Reporter** | [Wetland-watch](https://github.com/EleanorNabaloga/Wetland-watch) | General Public | Captures incident photos, attaches device evidence signatures, submits reports, and checks reward status. |
+| **Staff Dashboard** | **wetland-nema** (this repository) | NEMA Officers & Legal Staff | Staff authentication with MFA, 4-tier AI sorting, deadline tracking, hotspot mapping, and audit logging. |
 
 ---
 
@@ -40,11 +40,11 @@ flowchart TD
         WorkerCron["Cron AI Worker: /api/cron/ai-worker"]
         FallbackEngine["4-Tier AI Fallback Engine"]
         StaffUI["Next.js Staff Dashboard"]
-        OfficerReview["Officer Triage & Inspection Decision"]
+        OfficerReview["Officer Review & Inspection Decision"]
 
         QueueTable -->|Leases Micro-Batch| WorkerCron
-        WorkerCron -->|Inference Fallback Loop| FallbackEngine
-        FallbackEngine -->|Writes Recommendations| AssessmentsTable
+        WorkerCron -->|Fallback Check Loop| FallbackEngine
+        FallbackEngine -->|Writes Suggestions| AssessmentsTable
         AssessmentsTable -->|Surfaces Suggestions| StaffUI
         StaffUI -->|Records Officer Action| OfficerReview
         OfficerReview -->|Appends Immutable Entry| AuditTable
@@ -59,24 +59,24 @@ The applications share database state without coupling runtime processes. The re
 
 ## 2. Core Capabilities
 
-### Four-Tier AI Triage Pipeline
-To ensure high resilience across resource constraints, the dashboard includes a four-tier fallback engine:
-1. **Tier 1 (Cloud Multimodal API)**: High-resolution visual inspection and cross-lingual understanding via structured JSON outputs.
-2. **Tier 2 (Local CPU Model)**: Quantized INT8 model for on-premises deployments without external internet connectivity.
-3. **Tier 3 (Deterministic Keyword Engine)**: High-performance regular expressions mapping Ugandan environmental terms in Luganda, Kiswahili, and English (such as kazambi, ebyuma, bulangiti, kubumba).
-4. **Tier 4 (Heuristic Base SLA Engine)**: Statutory default SLAs and historical report type weightings.
+### Four-Tier AI Sorting Pipeline
+To work reliably even with slow internet or offline servers, the dashboard includes a four-tier fallback engine:
+1. **Tier 1 (Cloud Multimodal API)**: High-resolution visual review and multilingual understanding via structured JSON outputs.
+2. **Tier 2 (Local CPU Model)**: Small local model for on-site setups without external internet access.
+3. **Tier 3 (Local Language Keyword Rules)**: Fast rules matching Ugandan environmental terms in Luganda, Runyankole, Acholi, Kiswahili, and English (such as *kazambi*, *obukyafu*, *obutwa*, *okutema*, *lutobazi*).
+4. **Tier 4 (Base Deadline Weights)**: Statutory deadline defaults and standard report type weights.
 
-The AI system produces advisory suggestions only. Statutory categorizations, field inspection dispatches, and regulatory actions remain server-authoritative and require officer confirmation.
+The AI system gives helpful suggestions only. Category decisions, field inspection visits, and legal actions remain server-controlled and require officer confirmation.
 
 ### Multi-Factor Authentication and RBAC
 - **Strict Staff Roles**: `reviewer`, `inspector`, `legal`, `oversight`, and `admin`.
 - **MFA Enforcement**: TOTP 6-digit codes with AES-256-GCM encrypted server-side secrets and replay prevention.
-- **Session Security**: Cryptographically signed HS256 tokens with HTTP-only, SameSite strict cookies.
+- **Session Security**: Signed HS256 tokens with HTTP-only, SameSite strict cookies.
 
 ### Statutory SLA Tracking
 Tracks operational deadlines from initial submission:
 - **Acknowledgement**: Due within 2 days.
-- **Triage**: Due within 7 days.
+- **Sort (Category Choice)**: Due within 7 days.
 - **Field Inspection**: Due within 3 days for Emergency, 30 days for Enforcement.
 - **Final Regulatory Decision**: Due within 45 days.
 
@@ -136,7 +136,7 @@ npm start
 
 ## 4. Roles and Access Permissions
 
-| Role | Review and Triage | Trigger Field Inspections | View Audit Trail | Manage Staff Accounts | Access Aggregate Hotspots |
+| Role | Review and Sort | Trigger Field Inspections | View Audit Trail | Manage Staff Accounts | Access Aggregate Hotspots |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | `reviewer` | Yes | Yes | Yes | No | Yes |
 | `inspector` | Yes | Yes | Yes | No | Yes |
@@ -158,12 +158,12 @@ npm test
 npm run test:docs
 ```
 
-33 automated tests validate:
+47 automated tests validate:
 - **Documentation Integrity & Synchronization**: Verifies markdown link resolution, environment variable parity against `.env.example`, npm script references, and issue/PR template schemas.
-- **AI Triage Fallback Engine**: Tests coordinate quantization, contact scrubbing, Luganda keywords, and tier transitions.
+- **AI Sorting Fallback Engine**: Tests coordinate rounding (~110 meters), contact scrubbing, Luganda keywords, and tier transitions.
 - **SLA State Machine**: Validates transitions, overdue deadlines, and statutory time spans.
-- **Geospatial Hotspots**: Validates grid clustering, reporter deduplication, and decay formulas.
-- **TOTP MFA Cryptography**: Validates time step windows, clock drift tolerance, and replay rejections.
+- **Geospatial Hotspots**: Validates grid clustering, duplicate reporter checks, and decay formulas.
+- **TOTP MFA Security**: Validates time step windows, clock drift tolerance, and replay rejections.
 
 ---
 
