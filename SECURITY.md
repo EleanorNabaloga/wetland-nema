@@ -28,13 +28,13 @@ This project is open source. Cloners, deployers, and contributors must respect t
 
 ### 3.1 Whistleblower Protection and Privacy Standards
 - Citizen identity details (such as phone numbers for rewards) are stored exclusively in the separate `identity_vault` table with AES-256-GCM encryption.
-- Application logs, telemetry, error monitors, and external AI calls must never contain phone numbers, names, or unquantized coordinates.
-- Geolocation sent to external models is quantized to 3 decimal places (approximately 110 meter resolution) to prevent pinning individual residential compounds.
+- Application logs, telemetry, error monitors, and external AI calls must never contain phone numbers, names, or exact coordinates.
+- Location sent to external models is rounded to 3 decimal places (roughly 110 meters) so specific homes cannot be identified.
 
 ### 3.2 Anti-Sybil and Reward Abuse Defenses
 - Public keys are generated client-side and verified via ECDSA signatures on each submission.
 - Duplicate detection compares 64-bit difference hashes and byte fingerprints to prevent automated spam and reward farming.
-- AI triage suggestions never unlock financial rewards. Rewards unlock strictly after an on-site physical inspection affidavit is logged by a field officer.
+- AI sorting suggestions never unlock financial rewards. Rewards unlock strictly after an on-site physical inspection affidavit is logged by a field officer.
 
 ### 3.3 Protection Against Automated Denial of Service
 - Cloud AI inference runs through an asynchronous, rate-limited queue.

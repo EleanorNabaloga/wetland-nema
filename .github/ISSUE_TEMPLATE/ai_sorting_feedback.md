@@ -1,8 +1,8 @@
 ---
-name: AI Triage and Language Feedback
-about: Report a category misclassification, false positive emergency, or missing Ugandan dialect keywords
-title: "ai: report triage feedback or keyword suggestion"
-labels: ["ai-triage", "language-heuristics"]
+name: AI Sorting and Language Feedback
+about: Report a category mistake, false emergency alert, or missing Ugandan language keywords
+title: "ai: report sorting feedback or keyword suggestion"
+labels: ["ai-sorting", "language-rules"]
 assignees: ""
 ---
 

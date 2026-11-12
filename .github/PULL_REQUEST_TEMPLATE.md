@@ -16,7 +16,7 @@ Closes #
 
 ## Security and Privacy Checklist
 - [ ] Whistleblower anonymity preserved (no personal data added to reports or logs).
-- [ ] Cryptographic signatures and audit trail integrity preserved.
+- [ ] Signature and audit trail integrity preserved.
 
 ## Documentation Synchronization Checklist
 - [ ] All modified routes, variables, and scripts updated across README.md, docs/HANDOFF.md, and CHANGELOG.md.
