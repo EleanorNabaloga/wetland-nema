@@ -34,6 +34,7 @@ export async function GET(req, { params }) {
               water_ph AS "waterPh", water_clarity AS "waterClarity",
               odor, findings_summary AS "findingsSummary",
               action_recommended AS "actionRecommended",
+              forced, force_reason AS "forceReason",
               created_at AS "createdAt"
        FROM field_inspections
        WHERE report_id = $1
@@ -56,6 +57,37 @@ export async function POST(req, { params }) {
     if (!staff) return json({ error: "Forbidden" }, 403);
 
     const b = await req.json().catch(() => ({}));
+    const isForceRequested = Boolean(b.force);
+    const forceReason = typeof b.forceReason === "string" ? b.forceReason.trim() : (typeof b.force_reason === "string" ? b.force_reason.trim() : "");
+
+    if (staff.role === "inspector") {
+      if (isForceRequested) {
+        trackBlockedAction("field_inspection", "inspector_force_forbidden", {
+          id,
+          user: staff.email,
+        });
+        return json({ error: "Inspectors cannot force inspections. Administrative override is required." }, 403);
+      }
+    } else if (staff.role === "admin") {
+      if (!isForceRequested) {
+        trackBlockedAction("field_inspection", "admin_direct_inspection_forbidden", {
+          id,
+          user: staff.email,
+        });
+        return json({ error: "Only field inspectors can record standard inspections. Administrative access is restricted to forced overrides with reason." }, 403);
+      }
+      if (forceReason.length < 10) {
+        trackBlockedAction("field_inspection", "missing_or_short_force_reason", {
+          id,
+          user: staff.email,
+        });
+        return json({ error: "A written forceReason of at least 10 characters is required for administrative overrides" }, 400);
+      }
+    } else {
+      return json({ error: "Forbidden" }, 403);
+    }
+
+    const isForced = staff.role === "admin" && isForceRequested;
     const rawLat = b.lat;
     const rawLng = b.lng;
     const lat = rawLat == null || rawLat === "" ? NaN : Number(rawLat);
@@ -114,7 +146,7 @@ export async function POST(req, { params }) {
       const report = repRes.rows[0];
       const category = report.category || "Referral";
 
-      if (!NEEDS_INSPECTION.includes(category) && !b.force) {
+      if (!NEEDS_INSPECTION.includes(category) && !isForced) {
         trackBlockedAction("field_inspection", "not_applicable_category", {
           id,
           reason: category,
@@ -141,7 +173,7 @@ export async function POST(req, { params }) {
         { lat, lng },
       );
 
-      if ((!Number.isFinite(dist) || dist > maxAllowedDist) && !b.force) {
+      if ((!Number.isFinite(dist) || dist > maxAllowedDist) && !isForced) {
         trackBlockedAction("field_inspection", "gps_distance_exceeded", {
           id,
           reason: `${Math.round(dist)}m_limit_${Math.round(maxAllowedDist)}m`,
@@ -162,8 +194,8 @@ export async function POST(req, { params }) {
           id, report_id, ranger_email, certificate_number,
           lat, lng, distance_m, photo_url,
           water_ph, water_clarity, odor,
-          findings_summary, action_recommended, created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, now())`,
+          findings_summary, action_recommended, forced, force_reason, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, now())`,
         [
           inspectionId,
           id,
@@ -178,6 +210,8 @@ export async function POST(req, { params }) {
           odor,
           summary,
           action,
+          isForced,
+          isForced ? forceReason : null,
         ],
       );
 
@@ -196,11 +230,14 @@ export async function POST(req, { params }) {
           distanceM: Math.round(dist),
           waterPh,
           actionRecommended: action,
+          forced: isForced,
+          forceReason: isForced ? forceReason : null,
+          forcedBy: isForced ? staff.email : null,
         },
         run,
       );
 
-      return { body: { ok: true, inspectionId, distanceM: Math.round(dist) }, status: 201 };
+      return { body: { ok: true, inspectionId, distanceM: Math.round(dist), forced: isForced }, status: 201 };
     });
 
     if (txResult.errorBody) {

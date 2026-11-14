@@ -195,9 +195,9 @@ CREATE TABLE IF NOT EXISTS ai_assessments (
 ## Four-Tier Fallback Engine (`lib/ai/fallbackEngine.js`)
 
 To guarantee 100 percent operational uptime even during external network outages or quota exhaustion:
-- **Tier 1 (Cloud Multimodal)**: Google Gemini 2.5 Flash free tier, evaluating photo and multilingual text within an 1,800 ms timeout.
-- **Tier 2 (Decoupled Local Model)**: Local or containerized INT8 quantized model (MobileNetV4 + AfriBERTa) running on CPU with zero external network dependencies.
-- **Tier 3 (Deterministic Heuristics)**: Luganda and English regular expressions matching critical terms (obutwa, amakolero, kazambi, obukyafu, lutobazi, kasasiro).
+- **Tier 1 (Cloud Multimodal)**: Google Gemini 2.5 Flash. Disabled by default (`ai_governance.cloud_ai_enabled: false`). Evaluates sanitized citizen note text and report type within an 1,800 ms timeout via `x-goog-api-key` header. Requires DPIA and NEMA MoU approval before enabling. Reporter photos are never sent to external services.
+- **Tier 2 (Decoupled Local Model)**: Fast local on-server heuristic feature extractor (`lib/ai/localEngine.js`) running in under 60 ms on local CPU with zero external network calls, modeling Uganda bimodal rainfall seasonality and emergency keywords. (Containerized MobileNetV4 + AfriBERTa neural network model scheduled on roadmap).
+- **Tier 3 (Deterministic Heuristics)**: Luganda, Runyankole, Acholi, Ateso, and English regular expressions matching critical terms (obutwa, amakolero, kazambi, obukyafu, lutobazi, kasasiro) with grammatical negation handling.
 - **Tier 4 (Type Weight Baseline)**: Deterministic SLA and hotspot type weights from `lib/sla.js` and `lib/hotspots.js`.
 
 Testing the AI engine:

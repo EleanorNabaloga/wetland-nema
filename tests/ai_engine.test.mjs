@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { 
+  executeTier1,
   executeTier3, 
   executeTier4, 
   executeAiTriage, 
@@ -125,4 +126,31 @@ test("executeAiTriage passes custom regional keywords to Tier 3", async () => {
   const outcome = await executeAiTriage(report, customSettings);
   assert.equal(outcome.category, "Emergency");
   assert.equal(outcome.tier, 3);
+});
+
+test("executeTier1 is disabled by default and requires explicit cloud_ai_enabled setting", async () => {
+  const originalKey = process.env.GEMINI_API_KEY;
+  process.env.GEMINI_API_KEY = "dummy-test-key";
+  try {
+    const report = {
+      id: "CLOUD-TEST-01",
+      type: "Oil or chemicals",
+      note: "Toxic dump",
+      photo: "data:image/jpeg;base64,12345",
+    };
+
+    // Disabled when settings is null
+    const resNoSettings = await executeTier1(report, null);
+    assert.equal(resNoSettings, null);
+
+    // Disabled when cloud_ai_enabled is false
+    const resDisabled = await executeTier1(report, { ai_governance: { cloud_ai_enabled: false } });
+    assert.equal(resDisabled, null);
+  } finally {
+    if (originalKey !== undefined) {
+      process.env.GEMINI_API_KEY = originalKey;
+    } else {
+      delete process.env.GEMINI_API_KEY;
+    }
+  }
 });

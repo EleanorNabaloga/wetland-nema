@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { query, getPool } from "@/lib/db";
+import { query, getPool, logAudit } from "@/lib/db";
 import { ensureAiTables } from "@/lib/schema";
 import { executeAiTriage } from "@/lib/ai/fallbackEngine";
 import { getSystemSettings } from "@/lib/settings";
@@ -34,12 +34,14 @@ async function handleWorker(req) {
       return NextResponse.json({ processed: 0, status: "ai_tables_not_ready" });
     }
 
-    // Self-healing queue backfill: enqueue any reports that arrived before queue creation
+    // Self-healing queue backfill: only enqueue open reports that have not been sorted or decided yet
     await query(
       `INSERT INTO ai_triage_queue (report_id, status)
        SELECT r.id, 'pending'
        FROM reports r
-       WHERE r.id NOT IN (SELECT report_id FROM ai_triage_queue)
+       WHERE (r.triage_category IS NULL OR r.triage_category = '')
+         AND r.decided_at IS NULL
+         AND r.id NOT IN (SELECT report_id FROM ai_triage_queue)
        ON CONFLICT (report_id) DO NOTHING`,
     ).catch(() => {});
 
@@ -139,6 +141,17 @@ async function handleWorker(req) {
            WHERE id = $1`,
           [job.id, assessment.tier],
         );
+
+        await logAudit(
+          report.id,
+          "system:ai-worker",
+          "AI_ASSESSMENT_COMPLETED",
+          {
+            tier: assessment.tier,
+            category: assessment.category,
+            externalTransmitted: Boolean(assessment.externalTransmitted),
+          },
+        ).catch(() => {});
 
         processedCount++;
       } catch (jobErr) {
