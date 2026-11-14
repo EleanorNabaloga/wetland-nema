@@ -328,7 +328,7 @@ export default function Dashboard() {
                   {r.aiCategory && !r.category && (
                     <>
                       {" "}
-                      <span className="badge" style={{ background: "#e0f2fe", color: "#0369a1", border: "1px solid #bae6fd" }}>
+                      <span className="badge b-info">
                         Suggested: {r.aiCategory}
                       </span>
                     </>
@@ -539,21 +539,13 @@ export default function Dashboard() {
               )}
 
               {sel.aiCategory && (
-                <div
-                  style={{
-                    background: "rgba(2, 132, 199, 0.08)",
-                    border: "1px solid rgba(2, 132, 199, 0.25)",
-                    borderRadius: 12,
-                    padding: "10px 14px",
-                    margin: "12px 0",
-                  }}
-                >
-                  <div style={{ fontWeight: 600, fontSize: "0.875rem", color: "#0369a1" }}>
+                <div className="ai-box">
+                  <div className="ai-title">
                     Helpful Suggestion: {sel.aiCategory}
                     {sel.aiConfidence != null && ` (${Math.round(sel.aiConfidence * 100)}% confidence)`}
                   </div>
                   {sel.aiReason && (
-                    <div style={{ fontSize: "0.8125rem", color: "#475569", marginTop: 4 }}>
+                    <div className="ai-reason">
                       {sel.aiReason}
                     </div>
                   )}
@@ -561,7 +553,7 @@ export default function Dashboard() {
                     <button
                       type="button"
                       className="ghost"
-                      style={{ marginTop: 8, padding: "4px 10px", fontSize: "0.8125rem" }}
+                      style={{ marginTop: 8 }}
                       onClick={() => act(sel.id, { category: sel.aiCategory })}
                     >
                       Accept {sel.aiCategory}
@@ -615,21 +607,15 @@ export default function Dashboard() {
                         e.preventDefault();
                         submitInspection(sel.id);
                       }}
-                      style={{
-                        marginTop: 12,
-                        padding: 12,
-                        background: "#f8fafc",
-                        border: "1px solid #cbd5e1",
-                        borderRadius: 6,
-                      }}
+                      className="form-panel"
                     >
-                      <h4 style={{ margin: "0 0 8px 0" }}>Section 107 Field Inspection</h4>
+                      <h4>Section 107 Field Inspection</h4>
                       {inspError && (
-                        <p role="alert" style={{ color: "#dc2626", fontSize: 13, margin: "0 0 8px 0" }}>
+                        <p role="alert" className="alert-error">
                           {inspError}
                         </p>
                       )}
-                      <label className="label" style={{ display: "block", fontSize: 12 }}>
+                      <label className="label" style={{ display: "block" }}>
                         Certificate Number *
                       </label>
                       <input
@@ -638,12 +624,12 @@ export default function Dashboard() {
                         value={inspCert}
                         placeholder="e.g. NEMA/SEC107/2026/0123"
                         onChange={(e) => setInspCert(e.target.value)}
-                        style={{ width: "100%", padding: 6, marginBottom: 8 }}
+                        style={{ marginBottom: "0.6rem" }}
                       />
 
-                      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                        <div style={{ flex: 1 }}>
-                          <label className="label" style={{ display: "block", fontSize: 12 }}>
+                      <div className="form-row">
+                        <div>
+                          <label className="label" style={{ display: "block" }}>
                             On-site Lat *
                           </label>
                           <input
@@ -652,11 +638,10 @@ export default function Dashboard() {
                             required
                             value={inspLat}
                             onChange={(e) => setInspLat(e.target.value)}
-                            style={{ width: "100%", padding: 6 }}
                           />
                         </div>
-                        <div style={{ flex: 1 }}>
-                          <label className="label" style={{ display: "block", fontSize: 12 }}>
+                        <div>
+                          <label className="label" style={{ display: "block" }}>
                             On-site Lng *
                           </label>
                           <input
@@ -665,14 +650,13 @@ export default function Dashboard() {
                             required
                             value={inspLng}
                             onChange={(e) => setInspLng(e.target.value)}
-                            style={{ width: "100%", padding: 6 }}
                           />
                         </div>
                       </div>
 
-                      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                        <div style={{ flex: 1 }}>
-                          <label className="label" style={{ display: "block", fontSize: 12 }}>
+                      <div className="form-row">
+                        <div>
+                          <label className="label" style={{ display: "block" }}>
                             Water pH (0.0-14.0)
                           </label>
                           <input
@@ -683,17 +667,15 @@ export default function Dashboard() {
                             value={inspPh}
                             placeholder="7.0"
                             onChange={(e) => setInspPh(e.target.value)}
-                            style={{ width: "100%", padding: 6 }}
                           />
                         </div>
-                        <div style={{ flex: 1 }}>
-                          <label className="label" style={{ display: "block", fontSize: 12 }}>
+                        <div>
+                          <label className="label" style={{ display: "block" }}>
                             Water Clarity
                           </label>
                           <select
                             value={inspClarity}
                             onChange={(e) => setInspClarity(e.target.value)}
-                            style={{ width: "100%", padding: 6 }}
                           >
                             <option value="clear">Clear</option>
                             <option value="murky_clay">Murky clay</option>
@@ -703,15 +685,14 @@ export default function Dashboard() {
                         </div>
                       </div>
 
-                      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                        <div style={{ flex: 1 }}>
-                          <label className="label" style={{ display: "block", fontSize: 12 }}>
+                      <div className="form-row">
+                        <div>
+                          <label className="label" style={{ display: "block" }}>
                             Odor
                           </label>
                           <select
                             value={inspOdor}
                             onChange={(e) => setInspOdor(e.target.value)}
-                            style={{ width: "100%", padding: 6 }}
                           >
                             <option value="natural_earth">Natural earth</option>
                             <option value="raw_sewage">Raw sewage</option>
@@ -720,14 +701,13 @@ export default function Dashboard() {
                             <option value="none">None</option>
                           </select>
                         </div>
-                        <div style={{ flex: 1 }}>
-                          <label className="label" style={{ display: "block", fontSize: 12 }}>
+                        <div>
+                          <label className="label" style={{ display: "block" }}>
                             Action Recommended
                           </label>
                           <select
                             value={inspAction}
                             onChange={(e) => setInspAction(e.target.value)}
-                            style={{ width: "100%", padding: 6 }}
                           >
                             <option value="no_violation_natural_runoff">No violation (natural runoff)</option>
                             <option value="stop_notice">Stop notice</option>
@@ -738,7 +718,7 @@ export default function Dashboard() {
                         </div>
                       </div>
 
-                      <label className="label" style={{ display: "block", fontSize: 12 }}>
+                      <label className="label" style={{ display: "block" }}>
                         Findings Summary
                       </label>
                       <textarea
@@ -746,11 +726,11 @@ export default function Dashboard() {
                         placeholder="Detailed observations at the wetland..."
                         onChange={(e) => setInspSummary(e.target.value)}
                         rows={2}
-                        style={{ width: "100%", padding: 6, marginBottom: 8 }}
+                        style={{ marginBottom: "0.6rem" }}
                       />
 
-                      <div style={{ padding: 6, background: "#fef3c7", borderRadius: 4, marginBottom: 8 }}>
-                        <label style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}>
+                      <div className="override-box">
+                        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
                           <input
                             type="checkbox"
                             checked={inspForce}
@@ -764,7 +744,6 @@ export default function Dashboard() {
                             placeholder="Reason for override (min 10 characters)..."
                             value={inspForceReason}
                             onChange={(e) => setInspForceReason(e.target.value)}
-                            style={{ width: "100%", padding: 6, marginTop: 4, fontSize: 12 }}
                           />
                         )}
                       </div>
@@ -773,7 +752,7 @@ export default function Dashboard() {
                         type="submit"
                         className="big"
                         disabled={inspSubmitting}
-                        style={{ width: "100%", minHeight: 40 }}
+                        style={{ width: "100%", minHeight: 44 }}
                       >
                         {inspSubmitting ? "Recording..." : "Save Field Inspection"}
                       </button>
