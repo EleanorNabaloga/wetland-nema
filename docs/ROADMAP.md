@@ -17,6 +17,7 @@ This document provides a strictly verified status of all planned features for Ku
 | **AI Severity Sorting (Job 1)** | `docs/ai.md` (Build order: Job 1) | Completed | `lib/ai/fallbackEngine.js`, `app/api/cron/ai-worker/`, `tests/ai_engine.test.mjs` |
 | **Officer Sorting Feedback Loop** | `docs/ai.md` (Job 1: Sort by severity) | Completed | `app/api/reports/[id]/route.js` (`officer_action` accepted or overridden) |
 | **Repository Merge Safeguards** | `docs/BRANCH_PROTECTION.md` | Completed | `.github/workflows/merge-guard.yml`, `.githooks/pre-push`, `CODEOWNERS` |
+| **Offline Neural Network Model** | `docs/ai.md` (Local model) | Planned | Tracked in Phase 2 (INT8 MobileNetV4 + AfriBERTa on CPU) |
 | **Object Storage for Photos** | `README.md` (Still to build) | Planned | Tracked in Phase 2 |
 | **Automated Airtime Rewards** | `docs/design-spec.md` (Rewards) | Planned | Tracked in Phase 2 |
 | **ELMIS API Integration** | `docs/design-spec.md` (NEMA action) | Planned | Tracked in Phase 2 |
