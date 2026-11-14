@@ -81,6 +81,20 @@ export default function Dashboard() {
   const [trust, setTrust] = useState(null);
   const [trustTick, setTrustTick] = useState(0);
 
+  const [showInspection, setShowInspection] = useState(false);
+  const [inspCert, setInspCert] = useState("");
+  const [inspLat, setInspLat] = useState("");
+  const [inspLng, setInspLng] = useState("");
+  const [inspPh, setInspPh] = useState("");
+  const [inspClarity, setInspClarity] = useState("clear");
+  const [inspOdor, setInspOdor] = useState("natural_earth");
+  const [inspAction, setInspAction] = useState("no_violation_natural_runoff");
+  const [inspSummary, setInspSummary] = useState("");
+  const [inspForce, setInspForce] = useState(false);
+  const [inspForceReason, setInspForceReason] = useState("");
+  const [inspError, setInspError] = useState(null);
+  const [inspSubmitting, setInspSubmitting] = useState(false);
+
   const signedOut = useCallback(() => {
     router.push("/login?next=/dashboard");
     router.refresh();
@@ -139,6 +153,54 @@ export default function Dashboard() {
   const act = async (id, body) => {
     if (await patch(id, body)) load();
   };
+
+  async function submitInspection(id) {
+    setInspError(null);
+    if (!inspCert.trim()) {
+      setInspError("Certificate Number is required.");
+      return;
+    }
+    setInspSubmitting(true);
+    try {
+      const res = await fetch(`/api/reports/${id}/inspection`, {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          certificateNumber: inspCert.trim(),
+          lat: inspLat,
+          lng: inspLng,
+          waterPh: inspPh ? Number(inspPh) : null,
+          waterClarity: inspClarity,
+          odor: inspOdor,
+          actionRecommended: inspAction,
+          findingsSummary: inspSummary.trim() || null,
+          force: inspForce,
+          forceReason: inspForceReason.trim() || undefined,
+        }),
+      });
+      if (res.status === 401 || res.status === 403) {
+        const d = await res.json().catch(() => ({}));
+        setInspError(d.error || "Forbidden: Only authorized roles can submit inspections.");
+        setInspSubmitting(false);
+        return;
+      }
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setInspError(d.error || "Could not record inspection.");
+        setInspSubmitting(false);
+        return;
+      }
+      setShowInspection(false);
+      setInspCert("");
+      setInspForce(false);
+      setInspForceReason("");
+      load();
+    } catch {
+      setInspError("Could not connect to server.");
+    } finally {
+      setInspSubmitting(false);
+    }
+  }
 
   async function clearAll() {
     if (!confirm("Delete all demo reports?")) return;
@@ -406,11 +468,24 @@ export default function Dashboard() {
                 </dd>
                 <dt>Inspected</dt>
                 <dd>
-                  {needsInspection
-                    ? when(sel.inspectedAt)
-                    : sel.category
-                      ? "Not required"
-                      : "Not yet"}
+                  {needsInspection ? (
+                    <>
+                      {when(sel.inspectedAt)}
+                      {sel.inspectionForced && (
+                        <span
+                          className="badge b-warn"
+                          style={{ marginLeft: 6 }}
+                          title={sel.inspectionForceReason ? `Administrative override: ${sel.inspectionForceReason}` : "Location not verified"}
+                        >
+                          Location not verified
+                        </span>
+                      )}
+                    </>
+                  ) : sel.category ? (
+                    "Not required"
+                  ) : (
+                    "Not yet"
+                  )}
                 </dd>
                 <dt>Decided</dt>
                 <dd>{when(sel.decidedAt)}</dd>
@@ -519,14 +594,192 @@ export default function Dashboard() {
               </select>
 
               {needsInspection && !sel.inspectedAt && (
-                <button
-                  type="button"
-                  className="big"
-                  style={{ minHeight: 48, margin: "12px 0" }}
-                  onClick={() => act(sel.id, { inspected: true })}
-                >
-                  Mark inspection done
-                </button>
+                <div style={{ margin: "12px 0" }}>
+                  <button
+                    type="button"
+                    className="big"
+                    style={{ minHeight: 48, width: "100%" }}
+                    onClick={() => {
+                      setInspLat(sel.lat != null ? String(sel.lat) : "");
+                      setInspLng(sel.lng != null ? String(sel.lng) : "");
+                      setInspError(null);
+                      setShowInspection((v) => !v);
+                    }}
+                  >
+                    {showInspection ? "Close inspection form" : "Record field inspection"}
+                  </button>
+
+                  {showInspection && (
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        submitInspection(sel.id);
+                      }}
+                      style={{
+                        marginTop: 12,
+                        padding: 12,
+                        background: "#f8fafc",
+                        border: "1px solid #cbd5e1",
+                        borderRadius: 6,
+                      }}
+                    >
+                      <h4 style={{ margin: "0 0 8px 0" }}>Section 107 Field Inspection</h4>
+                      {inspError && (
+                        <p role="alert" style={{ color: "#dc2626", fontSize: 13, margin: "0 0 8px 0" }}>
+                          {inspError}
+                        </p>
+                      )}
+                      <label className="label" style={{ display: "block", fontSize: 12 }}>
+                        Certificate Number *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={inspCert}
+                        placeholder="e.g. NEMA/SEC107/2026/0123"
+                        onChange={(e) => setInspCert(e.target.value)}
+                        style={{ width: "100%", padding: 6, marginBottom: 8 }}
+                      />
+
+                      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                        <div style={{ flex: 1 }}>
+                          <label className="label" style={{ display: "block", fontSize: 12 }}>
+                            On-site Lat *
+                          </label>
+                          <input
+                            type="number"
+                            step="any"
+                            required
+                            value={inspLat}
+                            onChange={(e) => setInspLat(e.target.value)}
+                            style={{ width: "100%", padding: 6 }}
+                          />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <label className="label" style={{ display: "block", fontSize: 12 }}>
+                            On-site Lng *
+                          </label>
+                          <input
+                            type="number"
+                            step="any"
+                            required
+                            value={inspLng}
+                            onChange={(e) => setInspLng(e.target.value)}
+                            style={{ width: "100%", padding: 6 }}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                        <div style={{ flex: 1 }}>
+                          <label className="label" style={{ display: "block", fontSize: 12 }}>
+                            Water pH (0.0-14.0)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="14"
+                            value={inspPh}
+                            placeholder="7.0"
+                            onChange={(e) => setInspPh(e.target.value)}
+                            style={{ width: "100%", padding: 6 }}
+                          />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <label className="label" style={{ display: "block", fontSize: 12 }}>
+                            Water Clarity
+                          </label>
+                          <select
+                            value={inspClarity}
+                            onChange={(e) => setInspClarity(e.target.value)}
+                            style={{ width: "100%", padding: 6 }}
+                          >
+                            <option value="clear">Clear</option>
+                            <option value="murky_clay">Murky clay</option>
+                            <option value="chemical_opaque">Chemical opaque</option>
+                            <option value="oil_sheen">Oil sheen</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                        <div style={{ flex: 1 }}>
+                          <label className="label" style={{ display: "block", fontSize: 12 }}>
+                            Odor
+                          </label>
+                          <select
+                            value={inspOdor}
+                            onChange={(e) => setInspOdor(e.target.value)}
+                            style={{ width: "100%", padding: 6 }}
+                          >
+                            <option value="natural_earth">Natural earth</option>
+                            <option value="raw_sewage">Raw sewage</option>
+                            <option value="chemical_solvent">Chemical solvent</option>
+                            <option value="burning">Burning</option>
+                            <option value="none">None</option>
+                          </select>
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <label className="label" style={{ display: "block", fontSize: 12 }}>
+                            Action Recommended
+                          </label>
+                          <select
+                            value={inspAction}
+                            onChange={(e) => setInspAction(e.target.value)}
+                            style={{ width: "100%", padding: 6 }}
+                          >
+                            <option value="no_violation_natural_runoff">No violation (natural runoff)</option>
+                            <option value="stop_notice">Stop notice</option>
+                            <option value="restoration_order">Restoration order</option>
+                            <option value="environmental_police_escort">Environmental police escort</option>
+                            <option value="refer_to_local_council">Refer to local council</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <label className="label" style={{ display: "block", fontSize: 12 }}>
+                        Findings Summary
+                      </label>
+                      <textarea
+                        value={inspSummary}
+                        placeholder="Detailed observations at the wetland..."
+                        onChange={(e) => setInspSummary(e.target.value)}
+                        rows={2}
+                        style={{ width: "100%", padding: 6, marginBottom: 8 }}
+                      />
+
+                      <div style={{ padding: 6, background: "#fef3c7", borderRadius: 4, marginBottom: 8 }}>
+                        <label style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}>
+                          <input
+                            type="checkbox"
+                            checked={inspForce}
+                            onChange={(e) => setInspForce(e.target.checked)}
+                          />
+                          <b>Administrative override (GPS unavailable / remote swamp)</b>
+                        </label>
+                        {inspForce && (
+                          <input
+                            type="text"
+                            placeholder="Reason for override (min 10 characters)..."
+                            value={inspForceReason}
+                            onChange={(e) => setInspForceReason(e.target.value)}
+                            style={{ width: "100%", padding: 6, marginTop: 4, fontSize: 12 }}
+                          />
+                        )}
+                      </div>
+
+                      <button
+                        type="submit"
+                        className="big"
+                        disabled={inspSubmitting}
+                        style={{ width: "100%", minHeight: 40 }}
+                      >
+                        {inspSubmitting ? "Recording..." : "Save Field Inspection"}
+                      </button>
+                    </form>
+                  )}
+                </div>
               )}
 
               <label

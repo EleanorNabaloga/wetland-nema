@@ -109,3 +109,54 @@ test("Section 107 field inspection record inserts and updates report state", asy
   });
   assert.equal(postSla.stage, "decide");
 });
+
+test("forced inspections store forced boolean and written administrative justification", async () => {
+  await ensureAiTables().catch(() => {});
+
+  const reportId = `test-insp-forced-${Date.now()}`;
+  const now = Date.now();
+
+  await query(
+    `INSERT INTO reports (id, lat, lng, type, note, status, category, received_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [reportId, 0.3150, 32.5810, "Wetland Encroachment", "Illegal trenching", "viewed", "Enforcement", now],
+  );
+
+  const inspectionId = `insp-forced-${Date.now()}`;
+  const certNumber = "NEMA/SEC107/2026/0100";
+  const forceReason = "GPS signal blocked by dense papyrus canopy; verified on-site via photo";
+
+  await query(
+    `INSERT INTO field_inspections (
+      id, report_id, ranger_email, certificate_number,
+      lat, lng, distance_m, photo_url,
+      water_ph, water_clarity, odor,
+      findings_summary, action_recommended, forced, force_reason
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+    [
+      inspectionId,
+      reportId,
+      "admin@nema.gov",
+      certNumber,
+      0.3200,
+      32.5850,
+      600, // Distance > 300m forced by admin
+      null,
+      null,
+      "clear",
+      "natural_earth",
+      "Excavator tracks observed",
+      "restoration_order",
+      true,
+      forceReason,
+    ],
+  );
+
+  const res = await query(
+    `SELECT forced, force_reason FROM field_inspections WHERE id = $1`,
+    [inspectionId],
+  );
+  assert.equal(res.rows.length, 1);
+  assert.equal(res.rows[0].forced, true);
+  assert.equal(res.rows[0].force_reason, forceReason);
+});

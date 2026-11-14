@@ -80,10 +80,8 @@ export async function PATCH(req, { params }) {
         category = b.category;
       }
 
-      if (b.inspected === true && !row.inspected_at) {
-        if (!NEEDS_INSPECTION.includes(category)) return { error: "Inspection applies to Emergency and Enforcement only", code: 409 };
-        await run(`UPDATE reports SET inspected_at = now(), inspected_by = $2 WHERE id = $1`, [id, staff.email]);
-        await logAudit(id, staff.email, "INSPECTED", null, run);
+      if (b.inspected !== undefined) {
+        return { error: "Record the inspection using the inspection form", code: 409 };
       }
 
       if (outcomeGiven) {
