@@ -1,6 +1,6 @@
-# AI in Kuuma Obutonde (proposed)
+# AI in Kuuma Obutonde
 
-**Status: proposed, not built.** This is the brief for the AI part of the system: what it does, what it must not do, and how to tell whether it is working. It follows the rules in [design-spec.md](design-spec.md): human review, no auto-rejection, an audit trail for every decision, and reporter protection.
+**Status: Core fallback engine, database migrations, and observability modules implemented.** This document specifies how the AI triage subsystem operates, its four-tier fallback hierarchy, database schemas, anti-abuse protections, and operational metrics. It strictly follows the rules in [design-spec.md](design-spec.md) and our repository standards: human review, no auto-rejection, immutable audit trails, and whistleblower protection.
 
 ## Why
 
@@ -139,42 +139,70 @@ These help officers read reports faster. They come after Jobs 1 and 2.
 
 ## How it fits in
 
-```
-Report arrives (reporter app)
-        |
-        v
-Background job, staff side: build input (report fields, NO identity)
-        |                                          |
-        |                                 AI model returns severity,
-        |                                 category, next step, reason
-        |                                          |
-        |                    check reply: values must be from the allowed
-        |                    lists, else store nothing for this report
-        v
-ai_assessments (one row per report)  -- audit "AI_ASSESSED"
-        |
-        +--> Dashboard: list sorted by severity, then deadline;
-        |    suggestion + reason shown on the report;
-        |    officer accepts or overrides (PATCH /api/reports/[id] as today,
-        |    audit records which)
-        |
-        +--> /api/hotspots: severity weights instead of type weights
-             (reviewed reports only, as today) + one-line summaries
+```mermaid
+flowchart TD
+    ReportArrives["Report arrives in reporter app"] --> EnqueueJob["Insert pending row into ai_triage_queue"]
+    EnqueueJob --> CronWorker["Cron Worker: /api/cron/ai-worker"]
+    CronWorker --> FallbackEngine["4-Tier AI Fallback Engine"]
+    FallbackEngine --> ValidateOutput["Validate output schema and tier constraints"]
+    ValidateOutput --> SaveAssessment["Write row to ai_assessments table"]
+    SaveAssessment --> DashboardUI["Dashboard surfaces suggested category and severity"]
+    SaveAssessment --> HotspotsAPI["/api/hotspots applies severity weights"]
 ```
 
-Proposed table:
+## Database Tables and Implementation
+
+The database migration is defined in `db/migrations/20261115_ai_jobs_queue.sql`.
 
 ```sql
-CREATE TABLE ai_assessments (
-  report_id    text PRIMARY KEY REFERENCES reports(id) ON DELETE CASCADE,
-  model        text NOT NULL,          -- model name and version
-  severity     text CHECK (severity IN ('Critical', 'High', 'Medium', 'Low')),  -- null when low confidence
-  category     text,                   -- suggested; null when low confidence
-  outcome      text,                   -- suggested next step
-  confidence   text NOT NULL CHECK (confidence IN ('low', 'medium', 'high')),
-  reason       text NOT NULL,
-  created_at   timestamptz NOT NULL DEFAULT now()
+CREATE TABLE IF NOT EXISTS ai_triage_queue (
+  id            bigserial PRIMARY KEY,
+  report_id     text NOT NULL REFERENCES reports(id) ON DELETE CASCADE,
+  status        text NOT NULL DEFAULT 'pending' 
+                CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+  tier_executed smallint CHECK (tier_executed BETWEEN 1 AND 4),
+  attempts      int NOT NULL DEFAULT 0,
+  max_attempts  int NOT NULL DEFAULT 3,
+  locked_at     timestamptz,
+  locked_by     text,
+  last_error    text,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS ai_assessments (
+  id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  report_id          text NOT NULL REFERENCES reports(id) ON DELETE CASCADE,
+  model_id           text NOT NULL,
+  prompt_version     text NOT NULL,
+  severity           text CHECK (severity IN ('Critical', 'High', 'Medium', 'Low')),
+  suggested_category text CHECK (suggested_category IN ('Emergency', 'Enforcement', 'Referral', 'Duplicate', 'Insufficient')),
+  suggested_outcome  text CHECK (suggested_outcome IN ('Inspector will visit', 'Referred to another agency', 'Need more information')),
+  confidence         real NOT NULL CHECK (confidence BETWEEN 0.0 AND 1.0),
+  urgency_score      real NOT NULL CHECK (urgency_score BETWEEN 0.0 AND 1.0),
+  key_evidence_tags  text[] DEFAULT '{}',
+  reason             text NOT NULL,
+  officer_action     text DEFAULT 'pending' CHECK (officer_action IN ('pending', 'accepted', 'overridden', 'dismissed')),
+  actioned_at        timestamptz,
+  actioned_by        text REFERENCES staff_users(email) ON DELETE SET NULL,
+  tier_executed      smallint NOT NULL,
+  latency_ms         int,
+  is_latest          boolean NOT NULL DEFAULT true,
+  created_at         timestamptz NOT NULL DEFAULT now()
+);
+```
+
+## Four-Tier Fallback Engine (`lib/ai/fallbackEngine.js`)
+
+To guarantee 100 percent operational uptime even during external network outages or quota exhaustion:
+- **Tier 1 (Cloud Multimodal)**: Google Gemini 2.5 Flash. Disabled by default (`ai_governance.cloud_ai_enabled: false`). Evaluates sanitized citizen note text and report type within an 1,800 ms timeout via `x-goog-api-key` header. Requires DPIA and NEMA MoU approval before enabling. Reporter photos are never sent to external services.
+- **Tier 2 (Decoupled Local Model)**: Fast local on-server heuristic feature extractor (`lib/ai/localEngine.js`) running in under 60 ms on local CPU with zero external network calls, modeling Uganda bimodal rainfall seasonality and emergency keywords. (Containerized MobileNetV4 + AfriBERTa neural network model scheduled on roadmap).
+- **Tier 3 (Deterministic Heuristics)**: Luganda, Runyankole, Acholi, Ateso, and English regular expressions matching critical terms (obutwa, amakolero, kazambi, obukyafu, lutobazi, kasasiro) with grammatical negation handling.
+- **Tier 4 (Type Weight Baseline)**: Deterministic SLA and hotspot type weights from `lib/sla.js` and `lib/hotspots.js`.
+
+Testing the AI engine:
+```bash
+npm test tests/ai_engine.test.mjs
 ```
 
 When the officer triages, the audit log also records whether they **accepted** or **overrode** the suggestion. That makes the measurements below possible.

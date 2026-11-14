@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ago } from "@/lib/format";
@@ -21,10 +21,18 @@ const JSON_HEADERS = { "Content-Type": "application/json" };
 const IS_DEMO = process.env.NODE_ENV !== "production";
 const OVERDUE = { background: "#7f1d1d", color: "#fecaca" };
 
+function fmtCoord(val, digits = 4) {
+  const n = Number(val);
+  return Number.isFinite(n) ? n.toFixed(digits) : "N/A";
+}
+
 function mapUrl(r) {
+  const lat = Number(r?.lat);
+  const lng = Number(r?.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   const d = 0.0025;
-  const bbox = [r.lng - d, r.lat - d, r.lng + d, r.lat + d].join("%2C");
-  return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${r.lat}%2C${r.lng}`;
+  const bbox = [lng - d, lat - d, lng + d, lat + d].join("%2C");
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat}%2C${lng}`;
 }
 // Time between the photo being taken and the report reaching NEMA. Only
 // meaningful when the time came from the photo itself (gallery uploads, or
@@ -72,6 +80,20 @@ export default function Dashboard() {
   const [error, setError] = useState("");
   const [trust, setTrust] = useState(null);
   const [trustTick, setTrustTick] = useState(0);
+
+  const [showInspection, setShowInspection] = useState(false);
+  const [inspCert, setInspCert] = useState("");
+  const [inspLat, setInspLat] = useState("");
+  const [inspLng, setInspLng] = useState("");
+  const [inspPh, setInspPh] = useState("");
+  const [inspClarity, setInspClarity] = useState("clear");
+  const [inspOdor, setInspOdor] = useState("natural_earth");
+  const [inspAction, setInspAction] = useState("no_violation_natural_runoff");
+  const [inspSummary, setInspSummary] = useState("");
+  const [inspForce, setInspForce] = useState(false);
+  const [inspForceReason, setInspForceReason] = useState("");
+  const [inspError, setInspError] = useState(null);
+  const [inspSubmitting, setInspSubmitting] = useState(false);
 
   const signedOut = useCallback(() => {
     router.push("/login?next=/dashboard");
@@ -131,6 +153,54 @@ export default function Dashboard() {
   const act = async (id, body) => {
     if (await patch(id, body)) load();
   };
+
+  async function submitInspection(id) {
+    setInspError(null);
+    if (!inspCert.trim()) {
+      setInspError("Certificate Number is required.");
+      return;
+    }
+    setInspSubmitting(true);
+    try {
+      const res = await fetch(`/api/reports/${id}/inspection`, {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          certificateNumber: inspCert.trim(),
+          lat: inspLat,
+          lng: inspLng,
+          waterPh: inspPh ? Number(inspPh) : null,
+          waterClarity: inspClarity,
+          odor: inspOdor,
+          actionRecommended: inspAction,
+          findingsSummary: inspSummary.trim() || null,
+          force: inspForce,
+          forceReason: inspForceReason.trim() || undefined,
+        }),
+      });
+      if (res.status === 401 || res.status === 403) {
+        const d = await res.json().catch(() => ({}));
+        setInspError(d.error || "Forbidden: Only authorized roles can submit inspections.");
+        setInspSubmitting(false);
+        return;
+      }
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setInspError(d.error || "Could not record inspection.");
+        setInspSubmitting(false);
+        return;
+      }
+      setShowInspection(false);
+      setInspCert("");
+      setInspForce(false);
+      setInspForceReason("");
+      load();
+    } catch {
+      setInspError("Could not connect to server.");
+    } finally {
+      setInspSubmitting(false);
+    }
+  }
 
   async function clearAll() {
     if (!confirm("Delete all demo reports?")) return;
@@ -251,10 +321,18 @@ export default function Dashboard() {
                   </span>
                   <br />
                   <span className="muted">
-                    {r.lat.toFixed(4)}, {r.lng.toFixed(4)} · {ago(r.ts)}
+                    {fmtCoord(r.lat, 4)}, {fmtCoord(r.lng, 4)} · {ago(r.ts)}
                   </span>
                   <br />
                   <SlaBadge r={r} />
+                  {r.aiCategory && !r.category && (
+                    <>
+                      {" "}
+                      <span className="badge b-info">
+                        Suggested: {r.aiCategory}
+                      </span>
+                    </>
+                  )}
                   {captureDelay(r) > OLD_PHOTO_MS && (
                     <>
                       {" "}
@@ -294,12 +372,16 @@ export default function Dashboard() {
               {(sel.hasPhoto ?? Boolean(sel.photo)) && (
                 <img className="photo" alt="Evidence photo" src={`/api/reports/${encodeURIComponent(sel.id)}/photo`} />
               )}
-              <iframe
-                key={sel.id}
-                title="Map of where the photo was taken"
-                loading="lazy"
-                src={mapUrl(sel)}
-              />
+              {mapUrl(sel) ? (
+                <iframe
+                  key={sel.id}
+                  title="Map of where the photo was taken"
+                  loading="lazy"
+                  src={mapUrl(sel)}
+                />
+              ) : (
+                <p className="muted" style={{ padding: 16 }}>Coordinates not available</p>
+              )}
               <p className="note">
                 <a
                   className="link"
@@ -318,7 +400,7 @@ export default function Dashboard() {
                 <dd>{sel.note || "None"}</dd>
                 <dt>Coordinates</dt>
                 <dd>
-                  {sel.lat.toFixed(6)}, {sel.lng.toFixed(6)}
+                  {fmtCoord(sel.lat, 6)}, {fmtCoord(sel.lng, 6)}
                 </dd>
                 <dt>GPS accuracy</dt>
                 <dd>
@@ -378,7 +460,7 @@ export default function Dashboard() {
                   {when(sel.viewedAt)}
                   {sel.reviewedBy ? " by " + sel.reviewedBy : ""}
                 </dd>
-                <dt>Triaged</dt>
+                <dt>Sorted</dt>
                 <dd>
                   {sel.category
                     ? sel.category + " · " + when(sel.triagedAt)
@@ -386,11 +468,24 @@ export default function Dashboard() {
                 </dd>
                 <dt>Inspected</dt>
                 <dd>
-                  {needsInspection
-                    ? when(sel.inspectedAt)
-                    : sel.category
-                      ? "Not required"
-                      : "Not yet"}
+                  {needsInspection ? (
+                    <>
+                      {when(sel.inspectedAt)}
+                      {sel.inspectionForced && (
+                        <span
+                          className="badge b-warn"
+                          style={{ marginLeft: 6 }}
+                          title={sel.inspectionForceReason ? `Administrative override: ${sel.inspectionForceReason}` : "Location not verified"}
+                        >
+                          Location not verified
+                        </span>
+                      )}
+                    </>
+                  ) : sel.category ? (
+                    "Not required"
+                  ) : (
+                    "Not yet"
+                  )}
                 </dd>
                 <dt>Decided</dt>
                 <dd>{when(sel.decidedAt)}</dd>
@@ -443,12 +538,36 @@ export default function Dashboard() {
                 </button>
               )}
 
+              {sel.aiCategory && (
+                <div className="ai-box">
+                  <div className="ai-title">
+                    Helpful Suggestion: {sel.aiCategory}
+                    {sel.aiConfidence != null && ` (${Math.round(sel.aiConfidence * 100)}% confidence)`}
+                  </div>
+                  {sel.aiReason && (
+                    <div className="ai-reason">
+                      {sel.aiReason}
+                    </div>
+                  )}
+                  {reviewed && !sel.category && (
+                    <button
+                      type="button"
+                      className="ghost"
+                      style={{ marginTop: 8 }}
+                      onClick={() => act(sel.id, { category: sel.aiCategory })}
+                    >
+                      Accept {sel.aiCategory}
+                    </button>
+                  )}
+                </div>
+              )}
+
               <label
                 className="label"
                 htmlFor="cat"
                 style={{ display: "block" }}
               >
-                Triage category
+                Priority category
               </label>
               <select
                 id="cat"
@@ -467,14 +586,179 @@ export default function Dashboard() {
               </select>
 
               {needsInspection && !sel.inspectedAt && (
-                <button
-                  type="button"
-                  className="big"
-                  style={{ minHeight: 48, margin: "12px 0" }}
-                  onClick={() => act(sel.id, { inspected: true })}
-                >
-                  Mark inspection done
-                </button>
+                <div style={{ margin: "12px 0" }}>
+                  <button
+                    type="button"
+                    className="big"
+                    style={{ minHeight: 48, width: "100%" }}
+                    onClick={() => {
+                      setInspLat(sel.lat != null ? String(sel.lat) : "");
+                      setInspLng(sel.lng != null ? String(sel.lng) : "");
+                      setInspError(null);
+                      setShowInspection((v) => !v);
+                    }}
+                  >
+                    {showInspection ? "Close inspection form" : "Record field inspection"}
+                  </button>
+
+                  {showInspection && (
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        submitInspection(sel.id);
+                      }}
+                      className="form-panel"
+                    >
+                      <h4>Section 107 Field Inspection</h4>
+                      {inspError && (
+                        <p role="alert" className="alert-error">
+                          {inspError}
+                        </p>
+                      )}
+                      <label className="label" style={{ display: "block" }}>
+                        Certificate Number *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={inspCert}
+                        placeholder="e.g. NEMA/SEC107/2026/0123"
+                        onChange={(e) => setInspCert(e.target.value)}
+                        style={{ marginBottom: "0.6rem" }}
+                      />
+
+                      <div className="form-row">
+                        <div>
+                          <label className="label" style={{ display: "block" }}>
+                            On-site Lat *
+                          </label>
+                          <input
+                            type="number"
+                            step="any"
+                            required
+                            value={inspLat}
+                            onChange={(e) => setInspLat(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="label" style={{ display: "block" }}>
+                            On-site Lng *
+                          </label>
+                          <input
+                            type="number"
+                            step="any"
+                            required
+                            value={inspLng}
+                            onChange={(e) => setInspLng(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="form-row">
+                        <div>
+                          <label className="label" style={{ display: "block" }}>
+                            Water pH (0.0-14.0)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="14"
+                            value={inspPh}
+                            placeholder="7.0"
+                            onChange={(e) => setInspPh(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="label" style={{ display: "block" }}>
+                            Water Clarity
+                          </label>
+                          <select
+                            value={inspClarity}
+                            onChange={(e) => setInspClarity(e.target.value)}
+                          >
+                            <option value="clear">Clear</option>
+                            <option value="murky_clay">Murky clay</option>
+                            <option value="chemical_opaque">Chemical opaque</option>
+                            <option value="oil_sheen">Oil sheen</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="form-row">
+                        <div>
+                          <label className="label" style={{ display: "block" }}>
+                            Odor
+                          </label>
+                          <select
+                            value={inspOdor}
+                            onChange={(e) => setInspOdor(e.target.value)}
+                          >
+                            <option value="natural_earth">Natural earth</option>
+                            <option value="raw_sewage">Raw sewage</option>
+                            <option value="chemical_solvent">Chemical solvent</option>
+                            <option value="burning">Burning</option>
+                            <option value="none">None</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="label" style={{ display: "block" }}>
+                            Action Recommended
+                          </label>
+                          <select
+                            value={inspAction}
+                            onChange={(e) => setInspAction(e.target.value)}
+                          >
+                            <option value="no_violation_natural_runoff">No violation (natural runoff)</option>
+                            <option value="stop_notice">Stop notice</option>
+                            <option value="restoration_order">Restoration order</option>
+                            <option value="environmental_police_escort">Environmental police escort</option>
+                            <option value="refer_to_local_council">Refer to local council</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <label className="label" style={{ display: "block" }}>
+                        Findings Summary
+                      </label>
+                      <textarea
+                        value={inspSummary}
+                        placeholder="Detailed observations at the wetland..."
+                        onChange={(e) => setInspSummary(e.target.value)}
+                        rows={2}
+                        style={{ marginBottom: "0.6rem" }}
+                      />
+
+                      <div className="override-box">
+                        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                          <input
+                            type="checkbox"
+                            checked={inspForce}
+                            onChange={(e) => setInspForce(e.target.checked)}
+                          />
+                          <b>Administrative override (GPS unavailable / remote swamp)</b>
+                        </label>
+                        {inspForce && (
+                          <input
+                            type="text"
+                            placeholder="Reason for override (min 10 characters)..."
+                            value={inspForceReason}
+                            onChange={(e) => setInspForceReason(e.target.value)}
+                          />
+                        )}
+                      </div>
+
+                      <button
+                        type="submit"
+                        className="big"
+                        disabled={inspSubmitting}
+                        style={{ width: "100%", minHeight: 44 }}
+                      >
+                        {inspSubmitting ? "Recording..." : "Save Field Inspection"}
+                      </button>
+                    </form>
+                  )}
+                </div>
               )}
 
               <label
@@ -498,7 +782,7 @@ export default function Dashboard() {
               </select>
               {!reviewed && (
                 <p className="note">
-                  Review the report first to triage it and set a next step.
+                  Review the report first to sort it and set a next step.
                 </p>
               )}
             </>

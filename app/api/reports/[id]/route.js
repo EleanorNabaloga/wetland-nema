@@ -1,9 +1,10 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { query, withTransaction, logAudit } from "@/lib/db";
 import { requireRole } from "@/lib/guard";
-import { signatureStatusSql } from "@/lib/schema";
+import { signatureStatusSql, aiJoinSql } from "@/lib/schema";
 import { CATEGORIES, NEEDS_INSPECTION } from "@/lib/sla";
 import { recordTrustEvent, eventForCategory } from "@/lib/trust";
+import { getSystemSettings, applyAiDisplayMode } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 
@@ -17,18 +18,23 @@ export async function GET(req, { params }) {
     if (!staff) return json({ error: "Unauthorized" }, 401);
 
     const sigSql = await signatureStatusSql();
+    const ai = await aiJoinSql();
     const res = await query(
       `SELECT r.id, r.lat, r.lng, r.acc, r.ts, r.type, r.note, r.photo_url AS photo, r.hash, ${sigSql},
               r.status, r.outcome, r.viewed_at AS "viewedAt", r.reviewed_by AS "reviewedBy",
               r.triage_category AS category, r.triaged_at AS "triagedAt", r.inspected_at AS "inspectedAt",
               r.decided_at AS "decidedAt", (EXTRACT(EPOCH FROM r.received_at) * 1000)::double precision AS "receivedAt",
-              COALESCE(i.claimed, false) AS claimed
-       FROM reports r LEFT JOIN identity_vault i ON r.id = i.report_id WHERE r.id = $1`,
+              COALESCE(i.claimed, false) AS claimed ${ai.select}
+       FROM reports r 
+       LEFT JOIN identity_vault i ON r.id = i.report_id 
+       ${ai.join}
+       WHERE r.id = $1`,
       [id],
     );
     if (res.rows.length === 0) return json({ error: "Not found" }, 404);
     await logAudit(id, staff.email, "OPENED_REPORT");
-    return json(res.rows[0]);
+    const settings = await getSystemSettings().catch(() => null);
+    return json(applyAiDisplayMode(res.rows[0], settings));
   } catch (error) {
     console.error(error);
     return json({ error: "Server error" }, 500);
@@ -74,10 +80,8 @@ export async function PATCH(req, { params }) {
         category = b.category;
       }
 
-      if (b.inspected === true && !row.inspected_at) {
-        if (!NEEDS_INSPECTION.includes(category)) return { error: "Inspection applies to Emergency and Enforcement only", code: 409 };
-        await run(`UPDATE reports SET inspected_at = now(), inspected_by = $2 WHERE id = $1`, [id, staff.email]);
-        await logAudit(id, staff.email, "INSPECTED", null, run);
+      if (b.inspected !== undefined) {
+        return { error: "Record the inspection using the inspection form", code: 409 };
       }
 
       if (outcomeGiven) {
@@ -94,6 +98,18 @@ export async function PATCH(req, { params }) {
     });
 
     if (result.error) return json({ error: result.error }, result.code);
+
+    // Advisory feedback updates must never abort or block statutory report updates.
+    if (result.categoryChanged) {
+      await query(
+        `UPDATE ai_assessments 
+         SET officer_action = CASE WHEN suggested_category = $2 THEN 'accepted' ELSE 'overridden' END,
+             actioned_at = now(),
+             actioned_by = $3
+         WHERE report_id = $1 AND is_latest = true`,
+        [id, b.category, staff.email],
+      ).catch(() => {});
+    }
 
     // Trust score. This must never stop an officer from reviewing a report.
     try {

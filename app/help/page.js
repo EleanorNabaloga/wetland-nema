@@ -83,7 +83,7 @@ export default function HelpPage() {
   return (
     <main style={wrap}>
       <p>
-        <a className="link" href="/login">← Back to sign in</a>
+        <a className="link" href="/login">Back to sign in</a>
       </p>
       <h1>How to use the NEMA dashboard</h1>
       <p className="muted">
@@ -221,7 +221,7 @@ export default function HelpPage() {
             <b>Mark as reviewed.</b> This tells the reporter a person has looked at it.
           </li>
           <li>
-            <b>Choose a Triage category:</b>
+            <b>Choose a Sort category:</b>
             <ul>
               <li><b>Emergency</b>: serious harm now (e.g. chemical or sewage spill). Needs an inspection.</li>
               <li><b>Enforcement</b>: a breach NEMA should act on. Needs an inspection.</li>
@@ -254,7 +254,7 @@ export default function HelpPage() {
         <table style={table}>
           <tbody>
             <tr><td style={td}><b>Acknowledge</b> (mark as reviewed)</td><td style={td}>2 days</td></tr>
-            <tr><td style={td}><b>Triage</b> (choose a category)</td><td style={td}>7 days</td></tr>
+            <tr><td style={td}><b>Sort</b> (choose a category)</td><td style={td}>7 days</td></tr>
             <tr><td style={td}><b>Inspect</b></td><td style={td}>3 days for Emergency, 30 days for Enforcement</td></tr>
             <tr><td style={td}><b>Decide</b> (set the next step)</td><td style={td}>45 days</td></tr>
           </tbody>
@@ -299,7 +299,7 @@ export default function HelpPage() {
       </section>
 
       <p>
-        <a className="link" href="/login">Go to sign in →</a>
+        <a className="link" href="/login">Go to sign in</a>
       </p>
     </main>
   );

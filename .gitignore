@@ -5,7 +5,17 @@ data/
 .DS_Store
 certificates/
 .env
-node_modules
-.next
-data/
 *.bak
+
+# Local workspace configuration and untracked data
+.agents/
+AGENTS.md
+.cursorrules
+.github/copilot-instructions.md
+GEMINI.md
+*.docx
+*.pdf
+scratch/
+*baseline_data*
+*BASELINE_DATA*
+
