@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { requireRole } from "@/lib/guard";
 import { computeHotspots, reporterOf } from "@/lib/hotspots";
+import { aiJoinSql } from "@/lib/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -15,17 +16,22 @@ export async function GET(req) {
     const user = await requireRole(req, ROLES);
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+    const ai = await aiJoinSql();
     const res = await query(
       `SELECT r.id, r.lat, r.lng, r.acc, r.ts, r.type, r.status,
               r.device_public_key AS "publicKey",
               (EXTRACT(EPOCH FROM r.received_at) * 1000)::double precision AS "receivedAt"
-       FROM reports r ORDER BY r.received_at DESC LIMIT 5000`,
+              ${ai.select}
+       FROM reports r
+       ${ai.join}
+       ORDER BY r.received_at DESC LIMIT 5000`,
     );
     const reports = res.rows.map((r) => ({
       ...r,
       lat: Number(r.lat),
       lng: Number(r.lng),
       acc: r.acc == null ? null : Number(r.acc),
+      aiSeverity: r.aiSeverity || null,
     }));
 
     const canOpenReports = STAFF_ROLES.includes(user.role);

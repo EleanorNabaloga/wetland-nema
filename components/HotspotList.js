@@ -96,6 +96,11 @@ export default function HotspotList() {
             </strong>
             <span className="muted">{TREND[h.trend]}</span>
           </div>
+          {h.summary && (
+            <p style={{ margin: "8px 0 4px", fontWeight: 600, color: "var(--ink)" }}>
+              {h.summary}
+            </p>
+          )}
           <p style={{ margin: "8px 0" }}>
             {h.reportCount} {h.reportCount === 1 ? "report" : "reports"}
             {h.reporterCount != null ? " from " + h.reporterCount + (h.reporterCount === 1 ? " reporter" : " reporters") : ""}
