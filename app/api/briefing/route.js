@@ -53,9 +53,29 @@ export async function GET(req) {
       pendingStaff = staffRes.rows;
     }
 
+    let claims = [];
+    try {
+      const claimsRes = await query(
+        `SELECT i.report_id AS "reportId", i.phone_fingerprint AS "fingerprint",
+                i.claimed, (EXTRACT(EPOCH FROM i.claim_ts) * 1000)::double precision AS "claimTs",
+                COALESCE(i.payout_held, false) AS "payoutHeld",
+                i.payout_hold_reason AS "payoutHoldReason",
+                r.device_public_key AS "publicKey",
+                COALESCE(r.outcome = 'Marked false', false) AS "markedFalse"
+         FROM identity_vault i
+         LEFT JOIN reports r ON r.id = i.report_id
+         WHERE i.claimed = true
+         ORDER BY i.claim_ts DESC LIMIT 1000`,
+      );
+      claims = claimsRes.rows;
+    } catch {
+      claims = [];
+    }
+
     const briefing = generateBriefing(reports, {
       hotspots,
       pendingStaff,
+      claims,
       customSettings: settings,
     });
 
@@ -95,6 +115,7 @@ export async function GET(req) {
         isOversight ? { ...h, ids: undefined } : h,
       ),
       pendingStaff: isOversight ? [] : pendingStaff,
+      claimsWaitingFraudCheck: isOversight ? [] : briefing.claimsWaitingFraudCheck,
     });
   } catch (error) {
     console.error("[briefing] GET failed:", error);
