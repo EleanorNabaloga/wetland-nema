@@ -59,6 +59,7 @@ export default function HotspotList() {
         {canOpenReports && (
           <>
             <a className="link" href="/dashboard">Back to dashboard</a> ·{" "}
+            <a className="link" href="/briefing">Briefing</a> ·{" "}
           </>
         )}
         <a className="link" href="/help">Help</a> · <LogoutButton />
