@@ -25,6 +25,28 @@ test("reporter app types get sensible weights", () => {
   assert.equal(weightOf({ type: "Rubbish or waste" }), 2);
 });
 
+test("severity weights take priority over type weights", () => {
+  assert.equal(weightOf({ type: "Sewage", aiSeverity: "Critical" }), 10);
+  assert.equal(weightOf({ type: "Rubbish or waste", aiSeverity: "Critical" }), 10);
+  assert.equal(weightOf({ type: "Sewage", aiSeverity: "High" }), 6);
+  assert.equal(weightOf({ type: "Rubbish or waste", aiSeverity: "High" }), 6);
+  assert.equal(weightOf({ type: "Sewage", aiSeverity: "Medium" }), 3);
+  assert.equal(weightOf({ type: "Sewage", aiSeverity: "Low" }), 1);
+});
+
+test("hotspot summaries describe totals and trend accurately", () => {
+  const reports = [
+    report({ publicKey: "a", aiSeverity: "Critical", type: "Sewage" }),
+    report({ publicKey: "b", aiSeverity: "High", type: "Sewage" }),
+    report({ publicKey: "c", aiSeverity: "Medium", type: "Sewage" }),
+  ];
+  const [h] = computeHotspots(reports, now);
+  assert.ok(h.summary.includes("Sewage: 3 reports"));
+  assert.ok(h.summary.includes("1 Critical"));
+  assert.ok(h.summary.includes("1 High"));
+  assert.ok(h.summary.includes("Steady") || h.summary.includes("Getting worse") || h.summary.includes("Improving"));
+});
+
 test("only reviewed reports with a good GPS fix count", () => {
   const out = computeHotspots(
     [
