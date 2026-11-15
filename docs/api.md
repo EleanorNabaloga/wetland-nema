@@ -1,6 +1,6 @@
 # API reference
 
-All routes are under `/api`, take and return JSON, and rely on the `ww_staff` session cookie set at login. "Staff" below means the `reviewer`, `inspector` and `legal` roles. `oversight` may call only `/api/hotspots`.
+All routes are under `/api`, take and return JSON, and rely on the `ww_staff` session cookie set at login. "Staff" below means the `reviewer`, `inspector` and `legal` roles. `oversight` may call only `/api/hotspots` and `/api/briefing`.
 
 Errors always look like `{ "error": "message" }`.
 
@@ -144,6 +144,28 @@ Ranked hotspots from the latest 5000 reports, scored on the server (rules in [ar
 ```
 
 For `oversight`, `ids` is left out and `canOpenReports` is `false`. `lat`/`lng` is the centre of the 500 m square, not a report's location.
+
+## Daily Briefing
+
+### `GET /api/briefing` (staff, admin, oversight)
+Returns morning overview summarizing new Critical and High reports, impending SLA deadlines (within 48 hours or overdue), active hotspots that got worse, suggested reporter message drafts, and pending staff requests (for admins).
+
+```json
+{
+  "generatedAt": 1794411570733,
+  "summary": {
+    "urgentCount": 2,
+    "nudgeCount": 3,
+    "overdueCount": 1,
+    "worsenedHotspotCount": 1,
+    "pendingStaffCount": 0
+  },
+  "newUrgent": [],
+  "deadlineNudges": [],
+  "worsenedHotspots": [],
+  "pendingStaff": []
+}
+```
 
 ## Admin
 
