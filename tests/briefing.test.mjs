@@ -76,7 +76,7 @@ test("generateBriefing identifies impending 48h SLA deadline nudges and overdues
 
 test("generateBriefing aggregates worsened hotspots and pending staff count", () => {
   const hotspots = [
-    { name: "Kinawataka", trend: "worse", criticalCount: 2 },
+    { name: "Kinawataka", trend: "worsening", criticalCount: 2 },
     { name: "Lubigi", trend: "steady", criticalCount: 0 },
     { name: "Nalukolongo", trend: "better", criticalCount: 1 },
   ];
@@ -86,7 +86,7 @@ test("generateBriefing aggregates worsened hotspots and pending staff count", ()
   ];
 
   const briefing = generateBriefing([], { hotspots, pendingStaff });
-  assert.equal(briefing.summary.worsenedHotspotCount, 2); // Kinawataka (worse) and Nalukolongo (criticalCount > 0)
+  assert.equal(briefing.summary.worsenedHotspotCount, 2); // Kinawataka (worsening) and Nalukolongo (criticalCount > 0)
   assert.equal(briefing.summary.pendingStaffCount, 1);
 });
 

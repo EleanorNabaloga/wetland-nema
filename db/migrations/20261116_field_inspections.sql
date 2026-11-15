@@ -13,8 +13,13 @@ CREATE TABLE IF NOT EXISTS field_inspections (
   odor                text CHECK (odor IN ('natural_earth', 'raw_sewage', 'chemical_solvent', 'burning', 'none')),
   findings_summary    text,
   action_recommended  text CHECK (action_recommended IN ('restoration_order', 'stop_notice', 'environmental_police_escort', 'no_violation_natural_runoff', 'refer_to_local_council')),
+  forced              boolean NOT NULL DEFAULT false,
+  force_reason        text,
   created_at          timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE field_inspections ADD COLUMN IF NOT EXISTS forced boolean NOT NULL DEFAULT false;
+ALTER TABLE field_inspections ADD COLUMN IF NOT EXISTS force_reason text;
 
 CREATE INDEX IF NOT EXISTS idx_field_inspections_report ON field_inspections (report_id);
 CREATE INDEX IF NOT EXISTS idx_field_inspections_cert ON field_inspections (certificate_number);
