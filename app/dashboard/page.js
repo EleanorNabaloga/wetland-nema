@@ -95,6 +95,11 @@ export default function Dashboard() {
   const [inspError, setInspError] = useState(null);
   const [inspSubmitting, setInspSubmitting] = useState(false);
 
+  const [elmisDossier, setElmisDossier] = useState(null);
+  const [showDossier, setShowDossier] = useState(false);
+  const [elmisSyncing, setElmisSyncing] = useState(false);
+  const [elmisMsg, setElmisMsg] = useState("");
+
   const signedOut = useCallback(() => {
     router.push("/login?next=/dashboard");
     router.refresh();
@@ -241,6 +246,45 @@ export default function Dashboard() {
       live = false;
     };
   }, [selId, sel && sel.status, sel && sel.category, trustTick]);
+
+  useEffect(() => {
+    setElmisDossier(null);
+    setElmisMsg("");
+    if (!selId) return;
+    let live = true;
+    fetch(`/api/elmis?reportId=${encodeURIComponent(selId)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (live && d) setElmisDossier(d);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [selId, sel && sel.elmisSyncId, sel && sel.category, sel && sel.inspectedAt]);
+
+  async function syncToElmis(reportId) {
+    setElmisSyncing(true);
+    setElmisMsg("");
+    try {
+      const res = await fetch("/api/elmis", {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ reportId }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setElmisMsg(d.error || "Could not sync case to ELMIS.");
+      } else {
+        setElmisMsg(`Case synchronized as #${d.elmisSyncId}.`);
+        load();
+      }
+    } catch {
+      setElmisMsg("Network error contacting ELMIS gateway.");
+    } finally {
+      setElmisSyncing(false);
+    }
+  }
 
   return (
     <div className="dash">
@@ -526,6 +570,14 @@ export default function Dashboard() {
                     "Not recorded (sent before signature checks)"
                   )}
                 </dd>
+                <dt>ELMIS status</dt>
+                <dd>
+                  {sel.elmisSyncId ? (
+                    <span className="badge b-ok">Synced #{sel.elmisSyncId}</span>
+                  ) : (
+                    <span className="muted">Not synchronized</span>
+                  )}
+                </dd>
               </dl>
 
               {!reviewed && (
@@ -785,6 +837,186 @@ export default function Dashboard() {
                 <p className="note">
                   Review the report first to sort it and set a next step.
                 </p>
+              )}
+
+              {/* ELMIS Regulatory Integration Box */}
+              <div className="elmis-box">
+                <div className="elmis-title">
+                  <span>ELMIS Regulatory Integration</span>
+                  {sel.elmisSyncId ? (
+                    <span className="badge b-ok">Synced #{sel.elmisSyncId}</span>
+                  ) : (
+                    <span className="badge b-new">Pending Sync</span>
+                  )}
+                </div>
+
+                {elmisDossier?.elmisStatus?.permitCrossReference && (
+                  <div style={{ fontSize: "0.88rem", marginBottom: "0.6rem" }}>
+                    <b>Permit Status:</b>{" "}
+                    <span
+                      className={
+                        elmisDossier.elmisStatus.permitCrossReference.hasPermit &&
+                        elmisDossier.elmisStatus.permitCrossReference.status === "Active"
+                          ? "badge b-ok"
+                          : "badge b-warn"
+                      }
+                      style={{ marginLeft: 4 }}
+                    >
+                      {elmisDossier.elmisStatus.permitCrossReference.status}
+                    </span>
+                    <p className="muted" style={{ fontSize: "0.82rem", marginTop: "0.2rem" }}>
+                      {elmisDossier.elmisStatus.permitCrossReference.message}
+                    </p>
+                  </div>
+                )}
+
+                {elmisMsg && (
+                  <p className="note" style={{ color: "var(--green)", fontWeight: 600, marginBottom: "0.5rem" }}>
+                    {elmisMsg}
+                  </p>
+                )}
+
+                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.6rem" }}>
+                  {!sel.elmisSyncId && (
+                    <button
+                      type="button"
+                      className="ghost"
+                      disabled={!sel.category || elmisSyncing}
+                      onClick={() => syncToElmis(sel.id)}
+                      title={!sel.category ? "Assign priority category first" : "Dispatch to NEMA ELMIS"}
+                    >
+                      {elmisSyncing ? "Syncing..." : "Sync to ELMIS"}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => setShowDossier(true)}
+                  >
+                    Section 107 Evidentiary Dossier
+                  </button>
+                </div>
+              </div>
+
+              {showDossier && elmisDossier && (
+                <div className="modal-backdrop" onClick={() => setShowDossier(false)}>
+                  <div
+                    className="modal-content"
+                    onClick={(e) => e.stopPropagation()}
+                    role="dialog"
+                    aria-label="Section 107 Evidentiary Dossier"
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                      <h3 style={{ margin: 0, color: "var(--green)" }}>
+                        Section 107 Chain-of-Custody Dossier
+                      </h3>
+                      <button
+                        type="button"
+                        className="ghost"
+                        onClick={() => setShowDossier(false)}
+                      >
+                        ✕ Close
+                      </button>
+                    </div>
+
+                    <div style={{ fontSize: "0.88rem", borderBottom: "1.5px solid var(--line)", paddingBottom: "0.8rem", marginBottom: "0.8rem" }}>
+                      <b>Case Reference:</b> {elmisDossier.caseId} · <b>Statute:</b> {elmisDossier.legalStatute}
+                      <br />
+                      <span className="muted">Generated on {new Date(elmisDossier.generatedAt).toLocaleString()}</span>
+                    </div>
+
+                    <h4 style={{ margin: "0.8rem 0 0.4rem" }}>1. Whistleblower Capture Evidence</h4>
+                    <dl className="kv" style={{ marginTop: 0 }}>
+                      <dt>Threat Category</dt>
+                      <dd>{elmisDossier.evidenceSummary.threatType}</dd>
+                      <dt>Citizen Note</dt>
+                      <dd>{elmisDossier.evidenceSummary.sanitizedNote}</dd>
+                      <dt>Location (Quantized)</dt>
+                      <dd>
+                        {elmisDossier.evidenceSummary.quantizedLocation.lat},{" "}
+                        {elmisDossier.evidenceSummary.quantizedLocation.lng} (±{elmisDossier.evidenceSummary.quantizedLocation.accuracyM || "N/A"}m)
+                      </dd>
+                      <dt>Photo SHA-256 Hash</dt>
+                      <dd><code>{elmisDossier.evidenceSummary.tamperProofPhotoHash}</code></dd>
+                      <dt>Hardware Signature</dt>
+                      <dd>
+                        Status: <b>{elmisDossier.evidenceSummary.deviceHardwareSignature.status}</b> · Device Key: <code>{elmisDossier.evidenceSummary.deviceHardwareSignature.publicKeyPrefix}</code>
+                      </dd>
+                    </dl>
+
+                    <h4 style={{ margin: "1rem 0 0.4rem" }}>2. Section 107 Field Physical Inspection</h4>
+                    {elmisDossier.fieldInspection.verifiedOnSite ? (
+                      <dl className="kv" style={{ marginTop: 0 }}>
+                        <dt>Certificate Number</dt>
+                        <dd><b>{elmisDossier.fieldInspection.certificateNumber}</b></dd>
+                        <dt>Inspecting Ranger</dt>
+                        <dd>{elmisDossier.fieldInspection.rangerEmail}</dd>
+                        <dt>GPS Proximity Check</dt>
+                        <dd>
+                          {elmisDossier.fieldInspection.rangerCoordinates.distanceFromReportM}m from reported spot (
+                          {elmisDossier.fieldInspection.rangerCoordinates.verifiedWithin200m ? (
+                            <span className="badge b-ok">Verified within 200m</span>
+                          ) : (
+                            <span className="badge b-warn">Override / Remote</span>
+                          )}
+                          )
+                        </dd>
+                        <dt>Water Test Readings</dt>
+                        <dd>
+                          pH: <b>{elmisDossier.fieldInspection.waterTestReadings.pH != null ? elmisDossier.fieldInspection.waterTestReadings.pH : "Not tested"}</b> · Clarity: {elmisDossier.fieldInspection.waterTestReadings.clarity} · Odor: {elmisDossier.fieldInspection.waterTestReadings.odor}
+                        </dd>
+                        <dt>Recommended Action</dt>
+                        <dd><b>{elmisDossier.fieldInspection.recommendedAction}</b></dd>
+                      </dl>
+                    ) : (
+                      <p className="muted" style={{ fontStyle: "italic", fontSize: "0.9rem" }}>
+                        Physical on-site inspection pending. Section 107 verification required before environmental enforcement.
+                      </p>
+                    )}
+
+                    <h4 style={{ margin: "1rem 0 0.4rem" }}>3. ELMIS Synchronization & Regulatory Permit</h4>
+                    <dl className="kv" style={{ marginTop: 0 }}>
+                      <dt>ELMIS Status</dt>
+                      <dd>
+                        {elmisDossier.elmisStatus.synced ? (
+                          <span className="badge b-ok">Synchronized #{elmisDossier.elmisStatus.elmisSyncId}</span>
+                        ) : (
+                          <span className="badge b-new">Not synchronized</span>
+                        )}
+                      </dd>
+                      <dt>Permit Cross-Check</dt>
+                      <dd>{elmisDossier.elmisStatus.permitCrossReference.message}</dd>
+                    </dl>
+
+                    <h4 style={{ margin: "1rem 0 0.4rem" }}>4. Immutable Chain-of-Custody Audit Trail</h4>
+                    <ul style={{ fontSize: "0.85rem", paddingLeft: "1.2rem", margin: "0.4rem 0" }}>
+                      {elmisDossier.chainOfCustodyAuditTrail.map((entry, idx) => (
+                        <li key={idx} style={{ marginBottom: "0.25rem" }}>
+                          <b>{new Date(entry.timestamp).toLocaleString()}</b> · {entry.officerEmail}:{" "}
+                          <code>{entry.action}</code> {entry.detail ? `(${JSON.stringify(entry.detail)})` : ""}
+                        </li>
+                      ))}
+                    </ul>
+
+                    <div style={{ marginTop: "1rem", paddingTop: "0.8rem", borderTop: "1.5px solid var(--line)", display: "flex", justifyContent: "space-between" }}>
+                      <button
+                        type="button"
+                        className="ghost"
+                        onClick={() => window.print()}
+                      >
+                        🖨️ Print Dossier
+                      </button>
+                      <button
+                        type="button"
+                        className="big"
+                        style={{ minHeight: 40, width: "auto", padding: "0 1.5rem", marginTop: 0 }}
+                        onClick={() => setShowDossier(false)}
+                      >
+                        Done
+                      </button>
+                    </div>
+                  </div>
+                </div>
               )}
             </>
           )}
