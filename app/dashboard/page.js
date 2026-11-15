@@ -247,7 +247,8 @@ export default function Dashboard() {
       <header className="bar">
         <span className="logo">Kuuma Obutonde · NEMA dashboard</span>
         <span>
-          <a className="link" href="/hotspots">Hotspots</a>{" "}
+          <a className="link" href="/briefing">Briefing</a>{" "}
+          · <a className="link" href="/hotspots">Hotspots</a>{" "}
           · <a className="link" href="/help">Help</a>{" "}
           {IS_DEMO && (
             <>
