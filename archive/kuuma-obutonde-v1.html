@@ -914,21 +914,106 @@ MET.forEach(function(m){m.obs=''});
 var pl={locked:false,paused:false};
 function metRes(m){if(m.obs===''||isNaN(+m.obs))return null;return m.dir==='max'?(+m.obs<=+m.th):(+m.obs>=+m.th)}
 function renderPilot(){
-  $('#p-body').innerHTML=MET.map(function(m,i){
-    return '<tr><td><b>'+m.n+'</b><div class="small muted">'+m.u+'</div></td><td>'+(m.dir==='max'?'At or below':'At or above')+'</td><td><input type="number" min="0" data-th="'+i+'" value="'+m.th+'" '+(pl.locked?'disabled':'')+' aria-label="Threshold for '+esc(m.n)+'"></td><td><input type="number" min="0" data-ob="'+i+'" value="'+m.obs+'" aria-label="Observed value for '+esc(m.n)+'"></td><td id="mr'+i+'"></td></tr>';
-  }).join('');
+  var body=$('#p-body');
+  body.textContent='';
+  MET.forEach(function(m,i){
+    var tr=document.createElement('tr');
+
+    var tdName=document.createElement('td');
+    var b=document.createElement('b');
+    b.textContent=m.n;
+    var uDiv=document.createElement('div');
+    uDiv.className='small muted';
+    uDiv.textContent=m.u;
+    tdName.appendChild(b);
+    tdName.appendChild(uDiv);
+
+    var tdDir=document.createElement('td');
+    tdDir.textContent=m.dir==='max'?'At or below':'At or above';
+
+    var tdTh=document.createElement('td');
+    var inTh=document.createElement('input');
+    inTh.type='number';
+    inTh.min='0';
+    inTh.dataset.th=String(i);
+    inTh.value=m.th;
+    if(pl.locked)inTh.disabled=true;
+    inTh.setAttribute('aria-label','Threshold for '+m.n);
+    tdTh.appendChild(inTh);
+
+    var tdOb=document.createElement('td');
+    var inOb=document.createElement('input');
+    inOb.type='number';
+    inOb.min='0';
+    inOb.dataset.ob=String(i);
+    inOb.value=m.obs;
+    inOb.setAttribute('aria-label','Observed value for '+m.n);
+    tdOb.appendChild(inOb);
+
+    var tdRes=document.createElement('td');
+    tdRes.id='mr'+i;
+
+    tr.appendChild(tdName);
+    tr.appendChild(tdDir);
+    tr.appendChild(tdTh);
+    tr.appendChild(tdOb);
+    tr.appendChild(tdRes);
+
+    body.appendChild(tr);
+  });
   pilotStatus();
 }
 function pilotStatus(){
-  MET.forEach(function(m,i){var r=metRes(m),el=$('#mr'+i);if(el)el.innerHTML=r===null?'<span class="muted">Waiting for data</span>':r?'<span class="badge b-ok">Met</span>':'<span class="badge b-danger">Not met</span>'});
-  var miss=MET.filter(function(m){return metRes(m)===null}),fails=MET.filter(function(m){return metRes(m)===false}),capUp=$('#p-cap').checked,g=$('#p-gate'),h;
-  if(pl.paused)h='<div class="note red"><b>Paused.</b> A confirmed reporter-identification incident stops promotion to inspection until it is investigated and safeguards are fixed. No scaling decision can be made.</div>';
-  else if(!pl.locked)h='<div class="note sand"><b>Lock the thresholds first.</b> Results only count against thresholds fixed before the data.</div>';
-  else if(miss.length)h='<div class="note blue"><b>Waiting for data</b> on '+miss.length+' of '+MET.length+' metrics.</div>';
-  else if(fails.length)h='<div class="note red"><b>Fix the bottleneck first.</b> Not met: '+fails.map(function(m){return m.n}).join('; ')+'. Scaling now would add reports to a process that is not keeping its promises.</div>';
-  else if(!capUp)h='<div class="note sand"><b>Hold.</b> Every threshold is met, but NEMA capacity has not increased. More reports would only lengthen the queue.</div>';
-  else h='<div class="note ok"><b>Ready to scale.</b> Thresholds are met and capacity has grown. Plan the next sites with NEMA and keep the same reporting rules.</div>';
-  g.innerHTML=h;
+  MET.forEach(function(m,i){
+    var r=metRes(m),el=$('#mr'+i);
+    if(el){
+      el.textContent='';
+      var sp=document.createElement('span');
+      if(r===null){
+        sp.className='muted';
+        sp.textContent='Waiting for data';
+      } else {
+        sp.className=r?'badge b-ok':'badge b-danger';
+        sp.textContent=r?'Met':'Not met';
+      }
+      el.appendChild(sp);
+    }
+  });
+  var miss=MET.filter(function(m){return metRes(m)===null}),fails=MET.filter(function(m){return metRes(m)===false}),capUp=$('#p-cap').checked,g=$('#p-gate');
+  g.textContent='';
+  var box=document.createElement('div'),b=document.createElement('b');
+  if(pl.paused){
+    box.className='note red';
+    b.textContent='Paused.';
+    box.appendChild(b);
+    box.appendChild(document.createTextNode(' A confirmed reporter-identification incident stops promotion to inspection until it is investigated and safeguards are fixed. No scaling decision can be made.'));
+  } else if(!pl.locked){
+    box.className='note sand';
+    b.textContent='Lock the thresholds first.';
+    box.appendChild(b);
+    box.appendChild(document.createTextNode(' Results only count against thresholds fixed before the data.'));
+  } else if(miss.length){
+    box.className='note blue';
+    b.textContent='Waiting for data';
+    box.appendChild(b);
+    box.appendChild(document.createTextNode(' on '+miss.length+' of '+MET.length+' metrics.'));
+  } else if(fails.length){
+    box.className='note red';
+    b.textContent='Fix the bottleneck first.';
+    box.appendChild(b);
+    box.appendChild(document.createTextNode(' Not met: '+fails.map(function(m){return m.n}).join('; ')+'. Scaling now would add reports to a process that is not keeping its promises.'));
+  } else if(!capUp){
+    box.className='note sand';
+    b.textContent='Hold.';
+    box.appendChild(b);
+    box.appendChild(document.createTextNode(' Every threshold is met, but NEMA capacity has not increased. More reports would only lengthen the queue.'));
+  } else {
+    box.className='note ok';
+    b.textContent='Ready to scale.';
+    box.appendChild(b);
+    box.appendChild(document.createTextNode(' Thresholds are met and capacity has grown. Plan the next sites with NEMA and keep the same reporting rules.'));
+  }
+  g.appendChild(box);
 }
 $('#p-body').addEventListener('input',function(e){var t=e.target;if(t.dataset.th!=null)MET[t.dataset.th].th=t.value;if(t.dataset.ob!=null)MET[t.dataset.ob].obs=t.value;pilotStatus()});
 $('#p-cap').addEventListener('change',pilotStatus);
@@ -939,10 +1024,14 @@ $('#p-lock').addEventListener('click',async function(){
   if(!pl.locked){
     var ts=new Date().toISOString(),h=await sha256(new TextEncoder().encode(JSON.stringify(MET.map(function(m){return [m.n,m.dir,m.th]}))+ts).buffer);
     pl.locked=true;this.textContent='Amend thresholds (logged)';
-    st.hidden=false;st.innerHTML='<b>Pre-registered</b> '+esc(ts)+'. Fingerprint '+esc(shortHex(h,12))+'. Any change from here is logged as an amendment.';
+    st.hidden=false;st.textContent='';
+    var b=document.createElement('b');b.textContent='Pre-registered ';st.appendChild(b);
+    st.appendChild(document.createTextNode(ts+'. Fingerprint '+shortHex(h,12)+'. Any change from here is logged as an amendment.'));
     AUD.unshift({t:clock(),who:'Pilot lead (demo)',act:'Locked pilot thresholds, fingerprint '+shortHex(h,6),c:'PILOT'});
   } else {
-    pl.locked=false;this.textContent='Lock thresholds';st.hidden=false;st.innerHTML='<b>Amendment logged.</b> Thresholds are open for change and must be locked again with a new fingerprint.';
+    pl.locked=false;this.textContent='Lock thresholds';st.hidden=false;st.textContent='';
+    var b=document.createElement('b');b.textContent='Amendment logged. ';st.appendChild(b);
+    st.appendChild(document.createTextNode('Thresholds are open for change and must be locked again with a new fingerprint.'));
     AUD.unshift({t:clock(),who:'Pilot lead (demo)',act:'Opened thresholds for amendment',c:'PILOT'});
   }
   renderPilot();
