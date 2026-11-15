@@ -57,11 +57,27 @@ export default function DailyBriefing() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const handlePayoutAction = async (reportId, action) => {
+    try {
+      const res = await fetch("/api/admin/payouts", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reportId, action }),
+      });
+      if (res.ok) {
+        load();
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   const summary = data?.summary || {};
   const newUrgent = data?.newUrgent || [];
   const deadlineNudges = data?.deadlineNudges || [];
   const worsenedHotspots = data?.worsenedHotspots || [];
   const pendingStaff = data?.pendingStaff || [];
+  const claimsWaitingFraudCheck = data?.claimsWaitingFraudCheck || [];
 
   return (
     <div style={{ maxWidth: 960, margin: "0 auto", padding: "1.2rem" }}>
@@ -124,6 +140,14 @@ export default function DailyBriefing() {
                   {summary.pendingStaffCount}
                 </b>
                 <span className="muted">Pending Staff</span>
+              </div>
+            )}
+            {summary.fraudHoldCount > 0 && (
+              <div className="stat" style={{ ...cardStyle, borderColor: "var(--bad)" }}>
+                <b style={{ fontSize: "1.6rem", display: "block", color: "var(--bad)" }}>
+                  {summary.fraudHoldCount}
+                </b>
+                <span className="muted">Held Payouts</span>
               </div>
             )}
           </div>
@@ -328,6 +352,111 @@ export default function DailyBriefing() {
                       {h.summary}
                     </p>
                   )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Reward Fraud Review */}
+          <h2 style={{ margin: "2rem 0 0.8rem" }}>
+            Reward Fraud Review ({claimsWaitingFraudCheck.length})
+          </h2>
+          {claimsWaitingFraudCheck.length === 0 ? (
+            <div style={cardStyle}>
+              <p className="muted">No citizen reward claims currently held for fraud review.</p>
+            </div>
+          ) : (
+            <div style={{ display: "grid", gap: "0.8rem" }}>
+              {claimsWaitingFraudCheck.map((claim, idx) => (
+                <div
+                  key={claim.reportId || idx}
+                  style={{ ...cardStyle, borderLeft: "4px solid var(--bad)" }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                      flexWrap: "wrap",
+                      gap: "0.5rem",
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.5rem",
+                          marginBottom: "0.3rem",
+                        }}
+                      >
+                        <span
+                          className="badge"
+                          style={{
+                            background: "var(--bad-bg)",
+                            color: "var(--bad)",
+                          }}
+                        >
+                          Payout Held
+                        </span>
+                        <b>Report #{claim.reportId}</b>
+                        <span
+                          className="muted"
+                          style={{ fontSize: "0.85rem" }}
+                        >
+                          Fingerprint: {claim.fingerprintPrefix} · Device:{" "}
+                          {claim.devicePrefix}
+                        </span>
+                      </div>
+                      <ul
+                        style={{
+                          margin: "0.4rem 0 0.6rem",
+                          paddingLeft: "1.2rem",
+                          fontSize: "0.88rem",
+                          color: "var(--ink)",
+                        }}
+                      >
+                        {claim.reasons.map((r, i) => (
+                          <li key={i}>{r}</li>
+                        ))}
+                      </ul>
+                      <p
+                        className="muted"
+                        style={{ fontSize: "0.75rem" }}
+                      >
+                        Whistleblower contact numbers remain encrypted in the vault.
+                        Officers decide whether to pay or refuse.
+                      </p>
+                    </div>
+                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                      <button
+                        type="button"
+                        className="ghost"
+                        style={{
+                          color: "var(--ok)",
+                          borderColor: "var(--ok)",
+                        }}
+                        onClick={() =>
+                          handlePayoutAction(claim.reportId, "release")
+                        }
+                      >
+                        Approve Payout
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost"
+                        style={{
+                          color: "var(--bad)",
+                          borderColor: "var(--bad)",
+                        }}
+                        onClick={() =>
+                          handlePayoutAction(claim.reportId, "refuse")
+                        }
+                      >
+                        Refuse Payout
+                      </button>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>

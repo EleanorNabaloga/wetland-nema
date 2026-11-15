@@ -185,6 +185,20 @@ Up to 200 staff accounts, pending first: `email, name, role, status, createdAt, 
 
 Admins cannot change their own account or other admin accounts.
 
+### `GET /api/admin/payouts` (admin, reviewer, legal)
+Lists citizen reward claims currently held for fraud review, showing non-PII fingerprint prefixes and reasons.
+
+### `PATCH /api/admin/payouts` (admin, reviewer, legal)
+```json
+{ "reportId": "NEMA-101", "action": "release", "reason": "Verified whistleblower" }
+```
+Allows managers to release or refuse a held reward payout.
+
+| Action | Meaning |
+| --- | --- |
+| `release` | Releases the payout hold on `identity_vault` and clears the hold reason. |
+| `refuse` | Confirms the payout hold and records the administrative refusal reason. |
+
 ## Background Jobs and AI Workers
 
 ### `GET /api/cron/ai-worker` / `POST /api/cron/ai-worker`
