@@ -128,6 +128,23 @@ export default function Dashboard() {
     };
   }, [load]);
 
+  useEffect(() => {
+    setShowInspection(false);
+    setInspError(null);
+    setInspCert("");
+    setInspLat("");
+    setInspLng("");
+    setInspPh("");
+    setInspClarity("clear");
+    setInspOdor("natural_earth");
+    setInspAction("no_violation_natural_runoff");
+    setInspSummary("");
+    setInspForce(false);
+    setInspForceReason("");
+    setShowDossier(false);
+    setElmisMsg("");
+  }, [selId]);
+
   async function patch(id, body) {
     setError("");
     try {
@@ -427,17 +444,19 @@ export default function Dashboard() {
               ) : (
                 <p className="muted" style={{ padding: 16 }}>Coordinates not available</p>
               )}
-              <p className="note">
-                <a
-                  className="link"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  href={`https://www.openstreetmap.org/?mlat=${sel.lat}&mlon=${sel.lng}#map=18/${sel.lat}/${sel.lng}`}
-                >
-                  Open larger map
-                </a>{" "}
-                (needs internet)
-              </p>
+              {Number.isFinite(sel.lat) && Number.isFinite(sel.lng) && (
+                <p className="note">
+                  <a
+                    className="link"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    href={`https://www.openstreetmap.org/?mlat=${sel.lat}&mlon=${sel.lng}#map=18/${sel.lat}/${sel.lng}`}
+                  >
+                    Open larger map
+                  </a>{" "}
+                  (needs internet)
+                </p>
+              )}
               <dl className="kv">
                 <dt>Type</dt>
                 <dd>{sel.type || "Not stated"}</dd>

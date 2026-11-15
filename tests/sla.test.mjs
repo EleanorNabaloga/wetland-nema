@@ -41,8 +41,15 @@ test("a finished report has no deadline", () => {
   });
 });
 
+test("currentStage handles null reports safely", () => {
+  assert.equal(currentStage(null), "acknowledge");
+  assert.equal(currentStage(undefined), "acknowledge");
+});
+
 test("time spans read as minutes, hours or days", () => {
   assert.equal(fmtSpan(5 * 60000), "5 min");
   assert.equal(fmtSpan(-3 * 3600000), "3 h");
   assert.equal(fmtSpan(3 * DAY), "3 d");
+  assert.equal(fmtSpan(NaN), "0 min");
+  assert.equal(fmtSpan(null), "0 min");
 });
