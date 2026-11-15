@@ -22,7 +22,7 @@ export async function GET(req) {
 
     const reportsRes = await query(
       `SELECT r.id, r.lat, r.lng, r.acc, r.ts, r.type, r.status,
-              r.category, r.outcome, r.action_note AS "actionNote",
+              r.triage_category AS category, r.outcome, r.note AS "actionNote",
               r.inspected_at AS "inspectedAt", r.decided_at AS "decidedAt",
               r.device_public_key AS "publicKey",
               (EXTRACT(EPOCH FROM r.received_at) * 1000)::double precision AS "receivedAt"
