@@ -24,6 +24,7 @@ export async function GET(req, { params }) {
               r.status, r.outcome, r.viewed_at AS "viewedAt", r.reviewed_by AS "reviewedBy",
               r.triage_category AS category, r.triaged_at AS "triagedAt", r.inspected_at AS "inspectedAt",
               r.decided_at AS "decidedAt", (EXTRACT(EPOCH FROM r.received_at) * 1000)::double precision AS "receivedAt",
+              r.elmis_sync_id AS "elmisSyncId", r.elmis_synced_at AS "elmisSyncedAt",
               COALESCE(i.claimed, false) AS claimed ${ai.select}
        FROM reports r 
        LEFT JOIN identity_vault i ON r.id = i.report_id 
